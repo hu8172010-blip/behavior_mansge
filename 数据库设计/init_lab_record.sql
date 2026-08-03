@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `lab_record` (
+  `record_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `record_name` VARCHAR(128) NOT NULL,
+  `account_id` BIGINT UNSIGNED NOT NULL,
+  `device_id` BIGINT UNSIGNED DEFAULT NULL,
+  `video_filename` VARCHAR(255) NOT NULL,
+  `video_path` VARCHAR(512) NOT NULL,
+  `result_path` VARCHAR(512) NOT NULL,
+  `model_version` VARCHAR(64) DEFAULT NULL,
+  `event_count` INT DEFAULT 0,
+  `track_count` INT DEFAULT 0,
+  `status` TINYINT DEFAULT 1,
+  `is_published` TINYINT DEFAULT 0,
+  `published_at` DATETIME DEFAULT NULL,
+  `remark` VARCHAR(500) DEFAULT NULL,
+  `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`record_id`),
+  KEY `idx_account_id` (`account_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

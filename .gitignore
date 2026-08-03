@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+node_modules/
+dist/
+.idea/
+.vscode/
+
+# Large/generated files
+*.mp4
+*.pth
+*.pt
+*.zip
+*.rar
+*.tar.gz
+*.tar
+.npm-cache/
+frontend/.npm-cache/
+recognition_model/runs/
+recognition_model/training_runs/
+temp_test.mp4

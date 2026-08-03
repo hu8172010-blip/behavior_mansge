@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>人员异常行为与轨迹确认</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">VIDEO ANOMALY TRACKING</p>
+        <h1>人员异常行为与轨迹确认</h1>
+        <p class="lead">上传单个视频，跟踪人员并标出需要人工复核的疑似异常行为轨迹。</p>
+      </header>
+
+      <section class="panel upload-panel">
+        <form id="upload-form">
+          <label class="drop-zone" for="video-input">
+            <span class="drop-title">选择一个视频</span>
+            <span class="drop-copy">支持 MP4、AVI、MOV、MKV、WEBM，最大 2GB</span>
+            <input id="video-input" name="video" type="file" accept="video/*" required>
+          </label>
+          <div class="form-row">
+            <span id="file-name">尚未选择视频</span>
+            <button id="submit-button" type="submit">开始分析</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="status-panel" class="panel hidden" aria-live="polite">
+        <div class="status-line">
+          <div>
+            <span class="label">处理状态</span>
+            <strong id="status-text">等待上传</strong>
+          </div>
+          <strong id="progress-text">0%</strong>
+        </div>
+        <div class="progress-track"><div id="progress-bar"></div></div>
+        <p id="error-text" class="error hidden"></p>
+      </section>
+
+      <section id="result-panel" class="result-grid hidden">
+        <article class="panel model-card">
+          <div class="panel-title"><h2>分析模式</h2></div>
+          <div id="model-status" class="model-status"></div>
+        </article>
+
+        <article class="panel video-card">
+          <div class="panel-title">
+            <h2>轨迹标注视频</h2>
+            <a id="download-link" class="link-button" download>下载视频</a>
+          </div>
+          <video id="result-video" controls playsinline></video>
+        </article>
+
+        <article class="panel event-card">
+          <div class="panel-title">
+            <h2>疑似异常事件</h2>
+            <span id="event-count" class="badge">0</span>
+          </div>
+          <div id="event-list" class="event-list"></div>
+        </article>
+
+        <article class="panel prediction-card">
+          <div class="panel-title"><h2>模型窗口概率</h2></div>
+          <div id="prediction-list" class="prediction-list"></div>
+        </article>
+
+        <article class="panel json-card">
+          <div class="panel-title"><h2>轨迹 JSON</h2></div>
+          <pre id="json-output"></pre>
+        </article>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

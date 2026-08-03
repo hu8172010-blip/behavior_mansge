@@ -36,6 +36,7 @@ const todayLabel = computed(() => new Date().toLocaleDateString("zh-CN", { year:
 const avatarText = computed(() => (auth.realName || "用").slice(0, 1));
 
 let refreshTimer: number | null = null;
+let pendingCountTimer: number | null = null;
 
 function handlePermChange() {
   if (refreshTimer) window.clearTimeout(refreshTimer);
@@ -60,10 +61,14 @@ onMounted(async () => {
   settings.initFilterLabData();
   if (auth.isLoggedIn) {
     await auth.refreshPendingCount();
+  pendingCountTimer = window.setInterval(() => {
+    if (auth.isLoggedIn) auth.refreshPendingCount();
+  }, 30000);
   }
 });
 
-onUnmounted(() => {
+onUnmounted(() => {et();
+  if (pendingCountTimer) window.clarInervalpendingCountTimer
   disconnectPermissionSocket();
 });
 

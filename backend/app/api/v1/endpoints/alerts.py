@@ -110,13 +110,15 @@ async def list_alerts(
 
 
 @router.get("/todo-count")
-async def todo_count(db: AsyncSession = Depends(get_db), _: SysAccount = Depends(get_current_account)):
-    count = (
-        await db.execute(select(func.count()).select_from(FaBehaviorAlert).where(
-            FaBehaviorAlert.alert_status_id == 1,
-            FaBehaviorAlert.is_lab == 0,
-        ))
-    ).scalar_one()
+async def todo_count(
+    include_lab: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+    _: SysAccount = Depends(get_current_account),
+):
+    stmt = select(func.count()).select_from(FaBehaviorAlert).where(FaBehaviorAlert.alert_status_id == 1)
+    if not include_lab:
+        stmt = stmt.where(FaBehaviorAlert.is_lab == 0)
+    count = (await db.execute(stmt)).scalar_one()
     return ok({"count": count})
 
 

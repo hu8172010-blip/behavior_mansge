@@ -365,7 +365,7 @@ export const api = {
   enums: () => http.get<MetaEnums>("/meta/enums"),
   publicEnums: () => http.get<MetaEnums>("/meta/enums"),
   dashboard: () => http.get<DashboardSummary>("/dashboard/summary"),
-  todoCount: () => http.get<{ count: number }>("/alerts/todo-count"),
+  todoCount: () => http.get<{ count: number }>("/alerts/todo-count", { ...getLabIncludeParam() }),
   alerts: (params: { status_id?: number; severity_id?: number; keyword?: string; page: number; size: number }) =>
     http.get<PageData<AlertItem>>("/alerts", { ...params, ...getLabIncludeParam() }),
   confirmAlert: (alertId: number) => http.post(`/alerts/${alertId}/confirm`),

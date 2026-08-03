@@ -146,3 +146,18 @@ onMounted(load);
     </div>
   </div>
 </template>
+
+<style scoped>
+.table-row span:last-child {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.table-row .link {
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+}
+</style>

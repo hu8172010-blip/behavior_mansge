@@ -419,11 +419,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
 }
-.toolbar button {
-  padding: 6px 16px;
-  border-radius: 4px;
+.toolbar .primary,
+.toolbar .success,
+.toolbar .danger {
+  width: 120px;
+  padding: 10px 17px;
+  border-radius: 5px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
 }
 button.primary {
   background: #3788e8;
@@ -432,12 +438,12 @@ button.primary {
 }
 button.success {
   background: #52c41a;
-  color: #fff;
+  color: #fff !important;
   border: 1px solid #52c41a;
 }
 button.danger {
-  background: #fff;
-  color: #ff4d4f;
+  background: #ff4d4f;
+  color: #fff !important;
   border: 1px solid #ff4d4f;
 }
 button:disabled {

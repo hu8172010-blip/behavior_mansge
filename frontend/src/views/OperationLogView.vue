@@ -27,6 +27,7 @@ const loading = ref(false);
 const exporting = ref(false);
 const errorText = ref("");
 const notice = ref("");
+const jumpPage = ref<number | null>(null);
 
 function moduleLabel(value: string): string {
   return moduleOptions.find((item) => item.value === value)?.label || value;
@@ -57,6 +58,17 @@ async function loadLogs() {
 
 function search() {
   page.value = 1;
+  loadLogs();
+}
+
+function goToPage() {
+  const maxPage = Math.max(1, Math.ceil(total.value / size));
+  let p = Number(jumpPage.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  if (p === page.value) return;
+  page.value = p;
+  jumpPage.value = null;
   loadLogs();
 }
 
@@ -118,8 +130,12 @@ onMounted(loadLogs);
       <div class="toolbar" style="margin-top: 12px">
         <span>共 {{ total }} 条</span>
         <button :disabled="page <= 1" @click="page--; loadLogs()">上一页</button>
-        <span>第 {{ page }} 页</span>
+        <span>第 {{ page }} 页 / 共 {{ Math.max(1, Math.ceil(total / size)) }} 页</span>
         <button :disabled="page * size >= total" @click="page++; loadLogs()">下一页</button>
+        <span style="margin-left: 8px">跳转到</span>
+        <input v-model.number="jumpPage" type="number" min="1" :max="Math.max(1, Math.ceil(total / size))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goToPage" />
+        <span>页</span>
+        <button @click="goToPage" :disabled="!jumpPage">GO</button>
       </div>
     </div>
   </div>

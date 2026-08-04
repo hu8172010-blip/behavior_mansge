@@ -117,14 +117,14 @@ async def data_index(db: AsyncSession = Depends(get_db)):
 
     type_rows = (
         await db.execute(
-            select(DmBehaviorType.type_name, func.count(FaAbnormalBehavior.behavior_id))
+            select(DmBehaviorType.behavior_type_id, DmBehaviorType.type_name, func.count(FaAbnormalBehavior.behavior_id))
             .join(FaAbnormalBehavior, FaAbnormalBehavior.behavior_type_id == DmBehaviorType.behavior_type_id)
             .where(FaAbnormalBehavior.is_lab == 0)
             .group_by(DmBehaviorType.behavior_type_id)
             .order_by(func.count(FaAbnormalBehavior.behavior_id).desc())
         )
     ).all()
-    type_distribution = [{"name": row[0], "value": row[1]} for row in type_rows]
+    type_distribution = [{"id": row[0], "name": row[1], "value": row[2]} for row in type_rows]
 
     region_rows = (
         await db.execute(

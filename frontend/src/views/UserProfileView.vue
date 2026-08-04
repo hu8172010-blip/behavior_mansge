@@ -12,6 +12,8 @@ const loading = ref(false);
 const errorText = ref("");
 const notice = ref("");
 const submitting = ref(false);
+const exporting = ref(false);
+const jumpPage = ref<number | null>(null);
 
 async function loadPersons() {
   loading.value = true;
@@ -28,6 +30,29 @@ async function loadPersons() {
 
 function search() {
   page.value = 1;
+  loadPersons();
+}
+
+async function exportData() {
+  exporting.value = true;
+  try {
+    await api.exportPersons({ keyword: keyword.value || undefined, is_focused: isFocused.value });
+    notice.value = "人员资料已导出为 CSV 文件";
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    exporting.value = false;
+  }
+}
+
+function goToPage() {
+  const maxPage = Math.max(1, Math.ceil(total.value / size));
+  let p = Number(jumpPage.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  if (p === page.value) return;
+  page.value = p;
+  jumpPage.value = null;
   loadPersons();
 }
 
@@ -66,6 +91,7 @@ onMounted(loadPersons);
           <option :value="0">仅普通人员</option>
         </select>
         <button class="primary" @click="search">查询</button>
+        <button :disabled="exporting" @click="exportData">{{ exporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">
         <div class="table-head"><span>人员编号</span><span>体貌特征</span><span>首次出现</span><span>最近出现</span><span>异常行为</span><span>轨迹数</span><span>匹配账号</span><span>操作</span></div>
@@ -85,11 +111,15 @@ onMounted(loadPersons);
           </span>
         </div>
       </div>
-      <div class="toolbar" style="margin-top: 12px">
+      <div class="pager">
         <span>共 {{ total }} 条</span>
         <button :disabled="page <= 1" @click="page--; loadPersons()">上一页</button>
-        <span>第 {{ page }} 页</span>
+        <span>第 {{ page }} 页 / 共 {{ Math.max(1, Math.ceil(total / size)) }} 页</span>
         <button :disabled="page * size >= total" @click="page++; loadPersons()">下一页</button>
+        <span style="margin-left: 8px">跳转到</span>
+        <input v-model.number="jumpPage" type="number" min="1" :max="Math.max(1, Math.ceil(total / size))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goToPage" />
+        <span>页</span>
+        <button @click="goToPage" :disabled="!jumpPage">GO</button>
       </div>
     </div>
   </div>

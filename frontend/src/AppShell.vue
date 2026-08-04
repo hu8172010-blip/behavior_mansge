@@ -16,7 +16,7 @@ interface NavGroup { label: string; items: NavItem[] }
 const navGroups: NavGroup[] = [
   { label: "工作台", items: [{ text: "总览看板", path: "/dashboard", icon: "▦", perm: "dashboard:view" }] },
   { label: "轨迹管理", items: [{ text: "实时轨迹", path: "/track/realtime", icon: "◉", perm: "track:realtime" }, { text: "事后轨迹", path: "/track/history", icon: "⌁", perm: "track:history" }] },
-  { label: "设备管理", items: [{ text: "设备列表", path: "/device/list", icon: "▣", perm: "device:view" }] },
+  { label: "设备管理", items: [{ text: "设备列表", path: "/device/list", icon: "▣", perm: "device:view" }, { text: "维修工单", path: "/device/repair-order", icon: "⚒", perm: "device:repair" }] },
   { label: "数据管理", items: [{ text: "数据管理首页", path: "/data/index", icon: "▤", perm: "data:view" }, { text: "异常行为记录", path: "/data/abnormal-record", icon: "!", perm: "behavior:query" }, { text: "轨迹记录", path: "/data/track-record", icon: "⌁", perm: "track:query" }, { text: "备份与恢复", path: "/data/backup", icon: "↥", perm: "data:view" }, { text: "用户资料", path: "/data/user-profile", icon: "♙", perm: "person:query" }, { text: "操作日志", path: "/data/operation-log", icon: "≡", perm: "log:view" }] },
   { label: "告警与工单", items: [{ text: "告警待办", path: "/alarm/todo", icon: "⚠", perm: "alarm:view" }] },
   { label: "用户权限", items: [{ text: "权限管理", path: "/system/index", icon: "⚙", perm: "system:view" }, { text: "角色管理", path: "/system/role", icon: "◈", perm: "system:view" }, { text: "账号管理", path: "/system/user", icon: "♙", perm: "system:view" }] },

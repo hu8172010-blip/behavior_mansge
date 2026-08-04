@@ -50,6 +50,19 @@ async def require_super_account(
     return account
 
 
+def require_permission(perm_key: str):
+    async def dependency(
+        account: SysAccount = Depends(get_current_account),
+        db: AsyncSession = Depends(get_db),
+    ) -> SysAccount:
+        keys = await load_permission_keys(db, account)
+        if perm_key not in keys:
+            raise HTTPException(status_code=403, detail="无操作权限")
+        return account
+
+    return dependency
+
+
 async def load_permission_keys(db: AsyncSession, account: SysAccount) -> list[str]:
     if account.type_id == 1:
         rows = (await db.execute(select(SysPermission.perm_key))).scalars().all()

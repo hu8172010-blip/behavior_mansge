@@ -210,6 +210,74 @@ export interface FaultItem {
   repair_remark: string | null;
 }
 
+export interface RepairOrderItem {
+  id: number;
+  order_no: string;
+  fault_id: number;
+  device_id: number;
+  device_code: string;
+  device_name: string | null;
+  status: string;
+  fault_type: string;
+  fault_level: string;
+  fault_desc: string | null;
+  damage_cause: string | null;
+  repair_detail: string | null;
+  assigned_to: number | null;
+  assigned_name: string | null;
+  dispatch_strategy: string | null;
+  assigned_at: string | null;
+  plan_finish_time: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  create_time: string | null;
+}
+
+export interface RepairOrderDetail extends RepairOrderItem {
+  device_type: string | null;
+  device_ip: string | null;
+  device_location: string | null;
+  device_region: string | null;
+  fault_occurrence_time: string | null;
+  fault_disposal_status: string | null;
+  operator_name: string | null;
+  dispatch_rule_desc: string | null;
+  dispatch_result: string | null;
+  candidate_count: number | null;
+  load_snapshot: string | null;
+  history: { status: string; status_name: string; time: string | null; operator: string | null }[];
+  logs: { operator_name: string | null; operated_at: string | null; action: string | null; content: string | null }[];
+}
+
+export interface RepairCandidateItem {
+  account_id: number;
+  real_name: string;
+  dept: string | null;
+}
+
+export interface RepairDispatchLogItem {
+  id: number;
+  order_id: number;
+  fault_id: number;
+  device_id: number;
+  strategy: string;
+  candidate_count: number;
+  load_snapshot: string | null;
+  winner_id: number | null;
+  winner_name: string | null;
+  result: string;
+  remark: string | null;
+  create_time: string | null;
+}
+
+export interface SimulateFaultResult {
+  fault_id: number;
+  order_id: number;
+  order_no: string;
+  assigned_to: number | null;
+  assigned_name: string | null;
+}
+
 export interface PersonItem {
   person_id: number;
   appearance_desc: string | null;
@@ -395,6 +463,26 @@ export const api = {
   faults: (params: { device_id?: number; disposal_status?: string; page: number; size: number }) =>
     http.get<PageData<FaultItem>>("/devices/faults/list", params),
   closeFault: (id: number) => http.put(`/devices/faults/${id}/close`),
+  simulateFault: (id: number, body: { fault_type?: string; fault_level?: string; fault_desc?: string }) =>
+    http.post<SimulateFaultResult>(`/devices/${id}/simulate-fault`, body),
+  repairOrders: (params: {
+    status?: string;
+    keyword?: string;
+    fault_id?: number;
+    assigned_to?: number;
+    start_time?: string;
+    end_time?: string;
+    only_mine?: boolean;
+    page: number;
+    size: number;
+  }) => http.get<PageData<RepairOrderItem>>("/devices/repair-orders", { ...params, only_mine: params.only_mine ? "true" : undefined }),
+  repairOrderDetail: (id: number) => http.get<RepairOrderDetail>(`/devices/repair-orders/${id}`),
+  repairCandidates: () => http.get<RepairCandidateItem[]>("/devices/repair-candidates"),
+  acceptRepairOrder: (id: number) => http.post(`/devices/repair-orders/${id}/accept`),
+  finishRepairOrder: (id: number, body: { damage_cause: string; repair_detail: string }) =>
+    http.put(`/devices/repair-orders/${id}/finish`, body),
+  repairDispatchLogs: (params: { order_id?: number; page: number; size: number }) =>
+    http.get<PageData<RepairDispatchLogItem>>("/devices/repair-orders/dispatch-logs", params),
   persons: (params: { keyword?: string; is_focused?: number; page: number; size: number }) =>
     http.get<PageData<PersonItem>>("/persons", { ...params, ...getLabIncludeParam() }),
   togglePersonFocus: (personId: number, is_focused: number) => http.put(`/persons/${personId}/focus`, { is_focused }),

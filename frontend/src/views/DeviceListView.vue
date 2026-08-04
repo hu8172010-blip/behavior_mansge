@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
+import { useRoute } from "vue-router";
 import { api, type DeviceItem, type FaultItem } from "../api";
 import { useAuthStore } from "../stores/auth";
 
+const route = useRoute();
 const auth = useAuthStore();
 
 const activeTab = ref<"devices" | "faults">("devices");
@@ -205,7 +207,12 @@ async function closeFault(item: FaultItem) {
   }
 }
 
+
+
 onMounted(() => {
+  if (route.query.tab === "faults" && auth.hasPermission("device:info:view")) {
+    activeTab.value = "faults";
+  }
   loadDevices();
   loadFaults();
 });
@@ -217,7 +224,7 @@ onMounted(() => {
       <div><h2>设备列表管理</h2><p>摄像头 / 录像机 / 边缘盒台账与故障记录</p></div>
       <div class="tabs">
         <button :class="{ selected: activeTab === 'devices' }" @click="activeTab = 'devices'">设备台账</button>
-        <button :class="{ selected: activeTab === 'faults' }" @click="activeTab = 'faults'">故障记录</button>
+        <button v-if="auth.hasPermission('device:info:view')" :class="{ selected: activeTab === 'faults' }" @click="activeTab = 'faults'">故障记录</button>
       </div>
     </div>
 
@@ -252,7 +259,7 @@ onMounted(() => {
           <span><small>{{ item.ip_address || "—" }}</small></span>
           <span>
             <button v-if="auth.hasPermission('device:update')" class="btn-sm btn-assign" @click="openEdit(item)">编辑</button>
-            <button class="btn-sm" @click="viewBehaviors(item)">行为</button>
+            <button v-if="auth.hasPermission('device:info:view')" class="btn-sm" @click="viewBehaviors(item)">行为</button>
           </span>
         </div>
       </div>

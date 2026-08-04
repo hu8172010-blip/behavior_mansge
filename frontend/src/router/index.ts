@@ -11,6 +11,7 @@ import LoginView from "../views/LoginView.vue";
 import OperationLogView from "../views/OperationLogView.vue";
 import PlaceholderView from "../views/PlaceholderView.vue";
 import RealtimeTrackView from "../views/RealtimeTrackView.vue";
+import RepairOrderView from "../views/RepairOrderView.vue";
 import SystemPermView from "../views/SystemPermView.vue";
 import SystemRoleView from "../views/SystemRoleView.vue";
 import SystemUserView from "../views/SystemUserView.vue";
@@ -31,6 +32,7 @@ const router = createRouter({
     { path: "/track/realtime", component: RealtimeTrackView, meta: { title: "实时轨迹管理", perm: "track:realtime" } },
     { path: "/track/history", component: HistoryTrackView, meta: { title: "事后轨迹查询", perm: "track:history" } },
     { path: "/device/list", component: DeviceListView, meta: { title: "设备列表管理", perm: "device:view" } },
+    { path: "/device/repair-order", component: RepairOrderView, meta: { title: "设备维修工单", perm: "device:repair" } },
     { path: "/data/index", component: DataIndexView, meta: { title: "数据管理", perm: "data:view" } },
     { path: "/data/abnormal-record", component: BehaviorRecordView, meta: { title: "异常行为记录", perm: "behavior:query" } },
     { path: "/data/track-record", component: HistoryTrackView, meta: { title: "轨迹记录", perm: "track:query" } },

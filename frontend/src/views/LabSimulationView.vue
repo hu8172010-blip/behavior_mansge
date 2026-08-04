@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { api } from "../api";
+import { useAuthStore } from "../stores/auth";
+
+const auth = useAuthStore();
 
 interface AnomalyEvent {
   event_type: string;
@@ -48,6 +51,26 @@ const threshold = ref(0.7);
 const simulationOutput = ref<string[]>([]);
 const message = ref("");
 const messageType = ref<"info" | "success" | "error">("info");
+
+const faultDeviceId = ref<number | undefined>(undefined);
+const faultType = ref("HARDWARE");
+const faultLevel = ref("HIGH");
+const faultDesc = ref("");
+const faultSubmitting = ref(false);
+const faultMessage = ref("");
+const faultMessageType = ref<"info" | "success" | "error">("info");
+const faultTypeOptions = [
+  { value: "HARDWARE", label: "硬件损坏" },
+  { value: "NETWORK", label: "网络中断" },
+  { value: "VIDEO_ABNORMAL", label: "画面异常" },
+  { value: "OTHER", label: "其他" },
+];
+const faultLevelOptions = [
+  { value: "LOW", label: "低" },
+  { value: "MEDIUM", label: "中" },
+  { value: "HIGH", label: "高" },
+  { value: "CRITICAL", label: "严重" },
+];
 
 const summary = computed(() => {
   if (!result.value) return null;
@@ -224,6 +247,32 @@ async function clearSandbox() {
   }
 }
 
+async function submitFaultSimulate() {
+  if (faultDeviceId.value == null) {
+    faultMessage.value = "请选择目标设备";
+    faultMessageType.value = "error";
+    return;
+  }
+  faultSubmitting.value = true;
+  faultMessage.value = "";
+  try {
+    const result = await api.simulateFault(faultDeviceId.value, {
+      fault_type: faultType.value,
+      fault_level: faultLevel.value,
+      fault_desc: faultDesc.value || undefined,
+    });
+    faultMessage.value = result.assigned_name
+      ? `已生成故障并自动派发工单 ${result.order_no} → ${result.assigned_name}，可前往「维修工单」页面处理`
+      : `已生成故障工单 ${result.order_no}，暂无可用维修人员，待人工处理`;
+    faultMessageType.value = "success";
+  } catch (e: any) {
+    faultMessage.value = e?.message || "模拟故障失败";
+    faultMessageType.value = "error";
+  } finally {
+    faultSubmitting.value = false;
+  }
+}
+
 function runSimulation() {
   if (!result.value) return;
   const out: string[] = [];
@@ -298,6 +347,43 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="message" :class="['message', messageType]">
         {{ message }}
+      </div>
+    </div>
+
+    <div v-if="auth.hasPermission('device:update')" class="panel">
+      <div class="panel-title">
+        <div><h3>设备故障模拟</h3><p>人工模拟设备损坏：自动生成故障记录，设备置为故障并下调健康分，按平均负载自动派发维修工单</p></div>
+      </div>
+      <div class="form-row">
+        <label>目标设备</label>
+        <select v-model="faultDeviceId" class="fault-select">
+          <option :value="undefined">请选择设备</option>
+          <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.name }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>故障类型</label>
+        <select v-model="faultType" class="fault-select">
+          <option v-for="item in faultTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>故障级别</label>
+        <select v-model="faultLevel" class="fault-select">
+          <option v-for="item in faultLevelOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>故障描述</label>
+        <input v-model="faultDesc" placeholder="选填，默认：人工模拟设备故障" style="flex: 1" />
+      </div>
+      <div class="toolbar" style="margin-top: 12px">
+        <button class="primary" style="width: auto; min-width: 180px" :disabled="faultSubmitting || faultDeviceId == null" @click="submitFaultSimulate">
+          {{ faultSubmitting ? "提交中..." : "生成模拟故障并派单" }}
+        </button>
+      </div>
+      <div v-if="faultMessage" :class="['message', faultMessageType]">
+        {{ faultMessage }}
       </div>
     </div>
 
@@ -536,6 +622,13 @@ button:disabled {
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 13px;
+}
+.fault-select {
+  max-width: 420px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .message.info {
   background: #e6f4ff;

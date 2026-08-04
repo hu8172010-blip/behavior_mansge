@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-key-change-in-production"
     jwt_expire_hours: int = 24
     anomaly_tracker_url: str = "http://127.0.0.1:8080"
+    repair_restore_status: str = "ONLINE"
+    repair_restore_health_score: int = 100
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

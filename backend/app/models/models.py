@@ -121,6 +121,49 @@ class FaultRecord(Base):
     update_time: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class RepairOrder(Base):
+    __tablename__ = "device_repair_order"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    order_no: Mapped[str] = mapped_column(String(32))
+    fault_id: Mapped[int] = mapped_column(BigInteger)
+    device_id: Mapped[int] = mapped_column(BigInteger)
+    device_code: Mapped[str] = mapped_column(String(64))
+    device_name: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16), default="PENDING")
+    damage_cause: Mapped[str | None] = mapped_column(String(500))
+    repair_detail: Mapped[str | None] = mapped_column(String(500))
+    assigned_to: Mapped[int | None] = mapped_column(BigInteger)
+    assigned_name: Mapped[str | None] = mapped_column(String(64))
+    dispatch_strategy: Mapped[str | None] = mapped_column(String(32))
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime)
+    plan_finish_time: Mapped[datetime | None] = mapped_column(DateTime)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    operator_id: Mapped[int | None] = mapped_column(BigInteger)
+    operator_name: Mapped[str | None] = mapped_column(String(64))
+    is_deleted: Mapped[int] = mapped_column(SmallInteger, default=0)
+    create_time: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())
+    update_time: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class RepairDispatchLog(Base):
+    __tablename__ = "device_repair_dispatch_log"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    order_id: Mapped[int] = mapped_column(BigInteger)
+    fault_id: Mapped[int] = mapped_column(BigInteger)
+    device_id: Mapped[int] = mapped_column(BigInteger)
+    strategy: Mapped[str] = mapped_column(String(32), default="LEAST_LOAD")
+    candidate_count: Mapped[int] = mapped_column(Integer, default=0)
+    load_snapshot: Mapped[str | None] = mapped_column(Text)
+    winner_id: Mapped[int | None] = mapped_column(BigInteger)
+    winner_name: Mapped[str | None] = mapped_column(String(64))
+    result: Mapped[str] = mapped_column(String(16), default="SUCCESS")
+    remark: Mapped[str | None] = mapped_column(String(500))
+    create_time: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())
+
+
 class TrackPassChain(Base):
     __tablename__ = "track_pass_chain"
 

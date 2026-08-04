@@ -18,6 +18,7 @@ import UserProfileView from "../views/UserProfileView.vue";
 import WorkOrderDetailView from "../views/WorkOrderDetailView.vue";
 import LabSimulationView from "../views/LabSimulationView.vue";
 import LabRecordsView from "../views/LabRecordsView.vue";
+import DataBackupView from "../views/DataBackupView.vue";
 
 const placeholder = (title: string, perm: string) => ({ component: PlaceholderView, meta: { title, perm } });
 
@@ -34,7 +35,7 @@ const router = createRouter({
     { path: "/data/index", component: DataIndexView, meta: { title: "数据管理", perm: "data:view" } },
     { path: "/data/abnormal-record", component: BehaviorRecordView, meta: { title: "异常行为记录", perm: "behavior:query" } },
     { path: "/data/track-record", component: HistoryTrackView, meta: { title: "轨迹记录", perm: "track:query" } },
-    { path: "/data/backup", ...placeholder("数据备份与恢复", "data:view") },
+    { path: "/data/backup", component: DataBackupView, meta: { title: "数据备份与恢复", perm: "data:view" } },
     { path: "/data/user-profile", component: UserProfileView, meta: { title: "用户资料管理", perm: "person:query" } },
     { path: "/data/operation-log", component: OperationLogView, meta: { title: "系统操作日志", perm: "log:view" } },
     { path: "/alarm/todo", component: AlertTodoView, meta: { title: "告警待办队列", perm: "alarm:view" } },

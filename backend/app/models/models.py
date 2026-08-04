@@ -291,3 +291,31 @@ class FaOperationLog(Base):
     operation_content: Mapped[str | None] = mapped_column(Text)
     ip_address: Mapped[str | None] = mapped_column(String(64))
     operated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class SysDataBackup(Base):
+    __tablename__ = "sys_data_backup"
+
+    backup_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    backup_name: Mapped[str] = mapped_column(String(128))
+    backup_type: Mapped[str] = mapped_column(String(16), default="MANUAL")
+    strategy_desc: Mapped[str | None] = mapped_column(String(255))
+    file_path: Mapped[str] = mapped_column(String(512))
+    file_size: Mapped[int] = mapped_column(BigInteger, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="SUCCESS")
+    operator_id: Mapped[int | None] = mapped_column(BigInteger)
+    operator_name: Mapped[str | None] = mapped_column(String(64))
+    create_time: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())
+
+
+class SysDataRestoreLog(Base):
+    __tablename__ = "sys_data_restore_log"
+
+    restore_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    backup_id: Mapped[int] = mapped_column(BigInteger)
+    backup_name: Mapped[str | None] = mapped_column(String(128))
+    restore_status: Mapped[str] = mapped_column(String(16), default="SUCCESS")
+    result_msg: Mapped[str | None] = mapped_column(String(500))
+    operator_id: Mapped[int | None] = mapped_column(BigInteger)
+    operator_name: Mapped[str | None] = mapped_column(String(64))
+    restore_time: Mapped[datetime | None] = mapped_column(DateTime, server_default=func.now())

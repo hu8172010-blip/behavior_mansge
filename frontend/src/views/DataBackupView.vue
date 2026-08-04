@@ -29,6 +29,31 @@ const lastVerify = ref<{ ok: boolean; name: string; msg: string } | null>(null);
 const pendingRestore = ref<BackupItem | null>(null);
 const pendingDelete = ref<BackupItem | null>(null);
 
+// —— 前端分页（每页 10 条）——
+const pageSize = 10;
+const backupPage = ref(1);
+const restorePage = ref(1);
+const backupLogPage = ref(1);
+const restoreLogPage = ref(1);
+const jumpBackup = ref<number | null>(null);
+const jumpRestore = ref<number | null>(null);
+const jumpBackupLog = ref<number | null>(null);
+const jumpRestoreLog = ref<number | null>(null);
+
+const pagedBackups = computed(() => backups.value.slice((backupPage.value - 1) * pageSize, backupPage.value * pageSize));
+const pagedRestoreBackups = computed(() => backups.value.slice((restorePage.value - 1) * pageSize, restorePage.value * pageSize));
+const pagedBackupLogs = computed(() => backups.value.slice((backupLogPage.value - 1) * pageSize, backupLogPage.value * pageSize));
+const pagedRestoreLogs = computed(() => restoreLogs.value.slice((restoreLogPage.value - 1) * pageSize, restoreLogPage.value * pageSize));
+
+function goPage(target: { value: number }, jump: { value: number | null }, listTotal: number) {
+  const maxPage = Math.max(1, Math.ceil(listTotal / pageSize));
+  let p = Number(jump.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  target.value = p;
+  jump.value = null;
+}
+
 const backupTotal = computed(() => backups.value.length);
 
 const STATUS_LABEL: Record<string, string> = { SUCCESS: "成功", FAILED: "失败", RESTORED: "已恢复" };
@@ -256,7 +281,7 @@ onMounted(() => {
           <div class="table-head"><span>名称</span><span>类型</span><span>大小</span><span>状态</span><span>操作人</span><span>创建时间</span><span>操作</span></div>
           <div v-if="loading" class="table-row"><span>加载中...</span></div>
           <div v-else-if="!backups.length" class="table-row"><span>暂无备份。先在"备份策略配置"填写策略后点击"立即备份"。</span></div>
-          <div v-for="item in backups" :key="item.backup_id" class="table-row">
+          <div v-for="item in pagedBackups" :key="item.backup_id" class="table-row">
             <span>{{ item.backup_name }}<br /><small>{{ item.strategy_desc || "—" }}</small></span>
             <span>{{ typeLabel(item.backup_type) }}</span>
             <span>{{ sizeLabel(item.file_size) }}</span>
@@ -268,6 +293,16 @@ onMounted(() => {
               <button class="danger" @click="pendingDelete = item">删除</button>
             </span>
           </div>
+        </div>
+        <div class="pager">
+          <span>共 {{ backupTotal }} 条</span>
+          <button :disabled="backupPage <= 1" @click="backupPage--">上一页</button>
+          <span>第 {{ backupPage }} 页 / 共 {{ Math.max(1, Math.ceil(backupTotal / pageSize)) }} 页</span>
+          <button :disabled="backupPage * pageSize >= backupTotal" @click="backupPage++">下一页</button>
+          <span>跳转到</span>
+          <input v-model.number="jumpBackup" type="number" min="1" :max="Math.max(1, Math.ceil(backupTotal / pageSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goPage(backupPage, jumpBackup, backupTotal)" />
+          <span>页</span>
+          <button @click="goPage(backupPage, jumpBackup, backupTotal)" :disabled="!jumpBackup">GO</button>
         </div>
       </div>
     </div>
@@ -285,7 +320,7 @@ onMounted(() => {
           </div>
           <div v-if="loading" class="table-row"><span>加载中...</span></div>
           <div v-else-if="!backups.length" class="table-row"><span>暂无可用备份，请先切到"数据备份"页签创建快照</span></div>
-          <div v-for="item in backups" :key="item.backup_id" class="table-row">
+          <div v-for="item in pagedRestoreBackups" :key="item.backup_id" class="table-row">
             <span>{{ item.backup_name }}<br /><small>{{ item.strategy_desc || "—" }}</small></span>
             <span>{{ typeLabel(item.backup_type) }}<br /><small :class="statusClass(item.status)">{{ statusLabel(item.status) }}</small></span>
             <span>{{ sizeLabel(item.file_size) }}</span>
@@ -295,6 +330,16 @@ onMounted(() => {
               <button class="danger" @click="pendingDelete = item">删除</button>
             </span>
           </div>
+        </div>
+        <div class="pager">
+          <span>共 {{ backupTotal }} 条</span>
+          <button :disabled="restorePage <= 1" @click="restorePage--">上一页</button>
+          <span>第 {{ restorePage }} 页 / 共 {{ Math.max(1, Math.ceil(backupTotal / pageSize)) }} 页</span>
+          <button :disabled="restorePage * pageSize >= backupTotal" @click="restorePage++">下一页</button>
+          <span>跳转到</span>
+          <input v-model.number="jumpRestore" type="number" min="1" :max="Math.max(1, Math.ceil(backupTotal / pageSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goPage(restorePage, jumpRestore, backupTotal)" />
+          <span>页</span>
+          <button @click="goPage(restorePage, jumpRestore, backupTotal)" :disabled="!jumpRestore">GO</button>
         </div>
       </div>
     </div>
@@ -306,7 +351,7 @@ onMounted(() => {
         <div class="table full">
           <div class="table-head"><span>时间</span><span>备份名称</span><span>类型</span><span>状态</span><span>大小</span><span>策略描述</span><span>操作人</span></div>
           <div v-if="!backups.length" class="table-row"><span>暂无备份日志</span></div>
-          <div v-for="item in backups" :key="`log-${item.backup_id}`" class="table-row">
+          <div v-for="item in pagedBackupLogs" :key="`log-${item.backup_id}`" class="table-row">
             <span><small>{{ item.create_time }}</small></span>
             <span>{{ item.backup_name }}</span>
             <span>{{ typeLabel(item.backup_type) }}</span>
@@ -316,6 +361,16 @@ onMounted(() => {
             <span>{{ item.operator_name || "系统" }}</span>
           </div>
         </div>
+        <div class="pager">
+          <span>共 {{ backupTotal }} 条</span>
+          <button :disabled="backupLogPage <= 1" @click="backupLogPage--">上一页</button>
+          <span>第 {{ backupLogPage }} 页 / 共 {{ Math.max(1, Math.ceil(backupTotal / pageSize)) }} 页</span>
+          <button :disabled="backupLogPage * pageSize >= backupTotal" @click="backupLogPage++">下一页</button>
+          <span>跳转到</span>
+          <input v-model.number="jumpBackupLog" type="number" min="1" :max="Math.max(1, Math.ceil(backupTotal / pageSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goPage(backupLogPage, jumpBackupLog, backupTotal)" />
+          <span>页</span>
+          <button @click="goPage(backupLogPage, jumpBackupLog, backupTotal)" :disabled="!jumpBackupLog">GO</button>
+        </div>
       </div>
 
       <div class="panel data-panel" style="margin-top: 12px">
@@ -323,13 +378,23 @@ onMounted(() => {
         <div class="table full">
           <div class="table-head"><span>时间</span><span>来源备份</span><span>结果</span><span>操作人</span><span>说明</span></div>
           <div v-if="!restoreLogs.length" class="table-row"><span>暂无恢复日志</span></div>
-          <div v-for="item in restoreLogs" :key="item.restore_id" class="table-row">
+          <div v-for="item in pagedRestoreLogs" :key="item.restore_id" class="table-row">
             <span><small>{{ item.restore_time }}</small></span>
             <span>{{ item.backup_name || `#${item.backup_id}` }}</span>
             <span :class="statusClass(item.restore_status)">{{ item.restore_status === "SUCCESS" ? "成功" : "失败" }}</span>
             <span>{{ item.operator_name || "系统" }}</span>
             <span><small>{{ item.result_msg || "—" }}</small></span>
           </div>
+        </div>
+        <div class="pager">
+          <span>共 {{ restoreLogs.length }} 条</span>
+          <button :disabled="restoreLogPage <= 1" @click="restoreLogPage--">上一页</button>
+          <span>第 {{ restoreLogPage }} 页 / 共 {{ Math.max(1, Math.ceil(restoreLogs.length / pageSize)) }} 页</span>
+          <button :disabled="restoreLogPage * pageSize >= restoreLogs.length" @click="restoreLogPage++">下一页</button>
+          <span>跳转到</span>
+          <input v-model.number="jumpRestoreLog" type="number" min="1" :max="Math.max(1, Math.ceil(restoreLogs.length / pageSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goPage(restoreLogPage, jumpRestoreLog, restoreLogs.length)" />
+          <span>页</span>
+          <button @click="goPage(restoreLogPage, jumpRestoreLog, restoreLogs.length)" :disabled="!jumpRestoreLog">GO</button>
         </div>
       </div>
     </div>
@@ -455,6 +520,7 @@ onMounted(() => {
   padding-top: 10px !important;
   padding-bottom: 10px !important;
 }
+/* .pager 样式已迁到 app.css 全局，所有列表页统一 */
 .kv-list > div {
   display: grid;
   grid-template-columns: 110px 1fr;

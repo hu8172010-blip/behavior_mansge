@@ -21,6 +21,8 @@ from app.models.models import (
     SysUserType,
     TrackPassChain,
     TrackPassItem,
+    SysDataBackup,
+    SysDataRestoreLog,
 )
 
 __all__ = [
@@ -46,4 +48,6 @@ __all__ = [
     "SysUserType",
     "TrackPassChain",
     "TrackPassItem",
+    "SysDataBackup",
+    "SysDataRestoreLog",
 ]

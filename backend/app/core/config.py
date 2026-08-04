@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     anomaly_tracker_url: str = "http://127.0.0.1:8080"
     repair_restore_status: str = "ONLINE"
     repair_restore_health_score: int = 100
+    backup_dir: str = "data_backups"
+    mysql_bin_dir: str = "D:/MySQL/MySQL Server 8.0/bin"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

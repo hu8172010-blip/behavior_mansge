@@ -356,6 +356,30 @@ export interface DataIndexSummary {
   seven_day_trend: { date: string; count: number }[];
 }
 
+export interface BackupItem {
+  backup_id: number;
+  backup_name: string;
+  backup_type: string;
+  strategy_desc: string | null;
+  file_path: string;
+  file_size: number;
+  status: string;
+  operator_id: number | null;
+  operator_name: string | null;
+  create_time: string | null;
+}
+
+export interface RestoreLogItem {
+  restore_id: number;
+  backup_id: number;
+  backup_name: string | null;
+  restore_status: string;
+  result_msg: string | null;
+  operator_id: number | null;
+  operator_name: string | null;
+  restore_time: string | null;
+}
+
 export const api = {
   login: (login_name: string, password: string) => http.post<LoginResult>("/auth/login", { login_name, password }),
   register: (body: { real_name: string; login_name: string; password: string; type_id: number }) =>
@@ -457,4 +481,11 @@ export const api = {
   labRecordPublish: (id: number) => http.post<{ published: boolean }>(`/lab/records/${id}/publish`),
   labRecordUnpublish: (id: number) => http.post<{ unpublished: boolean }>(`/lab/records/${id}/unpublish`),
   labRecordDelete: (id: number) => http.delete<{ deleted: boolean }>(`/lab/records/${id}`),
+  backups: (params: { page?: number; size?: number; backup_type?: string; status?: string }) =>
+    http.get<PageData<BackupItem>>("/backups", params),
+  createBackup: (body: { backup_type?: "MANUAL" | "AUTO"; strategy_desc?: string } = {}) =>
+    http.post<BackupItem>("/backups", body),
+  deleteBackup: (backupId: number) => http.delete<void>(`/backups/${backupId}`),
+  restoreBackup: (backupId: number) => http.post<void>(`/backups/${backupId}/restore`),
+  restoreLogs: (params: { page?: number; size?: number }) => http.get<PageData<RestoreLogItem>>("/backups/restore-logs", params),
 };

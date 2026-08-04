@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-key-change-in-production"
     jwt_expire_hours: int = 24
     anomaly_tracker_url: str = "http://127.0.0.1:8080"
+    backup_dir: str = "data_backups"
+    mysql_bin_dir: str = "D:/MySQL/MySQL Server 8.0/bin"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

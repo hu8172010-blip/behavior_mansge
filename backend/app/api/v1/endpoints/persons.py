@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,11 +94,90 @@ async def list_persons(
     return ok(page_result(items, total, page, size))
 
 
+@router.get("/export")
+async def export_persons(
+    keyword: str | None = Query(default=None),
+    is_focused: int | None = Query(default=None),
+    include_lab: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+    _: SysAccount = Depends(get_current_account),
+):
+    import csv
+    import io
+
+    behavior_cnt = (
+        select(func.count())
+        .select_from(FaAbnormalBehavior)
+        .where(FaAbnormalBehavior.person_id == DmAnonymousPerson.person_id)
+        .correlate(DmAnonymousPerson)
+        .scalar_subquery()
+    )
+    track_cnt = (
+        select(func.count())
+        .select_from(TrackPassChain)
+        .where(TrackPassChain.person_id == DmAnonymousPerson.person_id)
+        .correlate(DmAnonymousPerson)
+        .scalar_subquery()
+    )
+    matched_account = SysAccount.__table__.alias("matched_account")
+    stmt = select(
+        DmAnonymousPerson,
+        behavior_cnt.label("behavior_count"),
+        track_cnt.label("track_count"),
+        matched_account.c.real_name.label("matched_user_name"),
+    ).outerjoin(matched_account, matched_account.c.account_id == DmAnonymousPerson.matched_user_id)
+    if not include_lab:
+        stmt = stmt.where(DmAnonymousPerson.is_lab == 0)
+    if keyword:
+        stmt = stmt.where(DmAnonymousPerson.appearance_desc.like(f"%{keyword}%"))
+    if is_focused is not None:
+        stmt = stmt.where(DmAnonymousPerson.is_focused == is_focused)
+    rows = (await db.execute(stmt.order_by(DmAnonymousPerson.last_seen_at.desc()).limit(5000))).all()
+
+    severity_map: dict = {}
+    ids = {row[0].risk_level_id for row in rows if row[0].risk_level_id}
+    if ids:
+        sev_rows = (
+            await db.execute(
+                select(DmSeverityLevel.severity_level_id, DmSeverityLevel.level_name).where(
+                    DmSeverityLevel.severity_level_id.in_(ids)
+                )
+            )
+        ).all()
+        severity_map = {r[0]: r[1] for r in sev_rows}
+
+    buffer = io.StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["人员ID", "外貌特征", "首次出现", "最后出现", "是否关注", "风险等级", "匹配账号", "匹配置信度", "行为次数", "轨迹次数"])
+    for row in rows:
+        person = row[0]
+        writer.writerow([
+            person.person_id,
+            (person.appearance_desc or "").replace("\n", " "),
+            fmt(person.first_seen_at) or "",
+            fmt(person.last_seen_at) or "",
+            "是" if person.is_focused else "否",
+            severity_map.get(person.risk_level_id, ""),
+            row[3] or "",
+            float(person.match_confidence) if person.match_confidence is not None else "",
+            row[1],
+            row[2],
+        ])
+    buffer.seek(0)
+    filename = f"anonymous_persons_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 class FocusBody(BaseModel):
     is_focused: int
 
 
-@router.get("/{person_id}")
+@router.get("/{person_id:int}")
 async def person_detail(person_id: int, db: AsyncSession = Depends(get_db), _: SysAccount = Depends(get_current_account)):
     person = (
         await db.execute(select(DmAnonymousPerson).where(DmAnonymousPerson.person_id == person_id))
@@ -116,6 +196,13 @@ async def person_detail(person_id: int, db: AsyncSession = Depends(get_db), _: S
     track_count = (
         await db.execute(select(func.count()).select_from(TrackPassChain).where(TrackPassChain.person_id == person_id))
     ).scalar_one()
+    risk_level_name = None
+    if person.risk_level_id:
+        risk_level_name = (
+            await db.execute(
+                select(DmSeverityLevel.level_name).where(DmSeverityLevel.severity_level_id == person.risk_level_id)
+            )
+        ).scalar_one_or_none()
     recent_rows = (
         await db.execute(
             select(
@@ -162,6 +249,7 @@ async def person_detail(person_id: int, db: AsyncSession = Depends(get_db), _: S
             "last_seen_at": fmt(person.last_seen_at),
             "is_focused": person.is_focused,
             "risk_level_id": person.risk_level_id,
+            "risk_level_name": risk_level_name,
             "matched_user_id": person.matched_user_id,
             "matched_user_name": matched_name,
             "match_confidence": float(person.match_confidence) if person.match_confidence is not None else None,

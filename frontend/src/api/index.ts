@@ -419,7 +419,7 @@ export interface DataIndexSummary {
     person_count: number;
     device_count: number;
   };
-  type_distribution: { name: string; value: number }[];
+  type_distribution: { id: number; name: string; value: number }[];
   region_distribution: { name: string; value: number }[];
   seven_day_trend: { date: string; count: number }[];
 }
@@ -473,6 +473,9 @@ export const api = {
     severity_id?: number;
     status_id?: number;
     camera_id?: number;
+    region_name?: string;
+    start_time?: string;
+    end_time?: string;
     keyword?: string;
     page: number;
     size: number;
@@ -510,6 +513,8 @@ export const api = {
   persons: (params: { keyword?: string; is_focused?: number; page: number; size: number }) =>
     http.get<PageData<PersonItem>>("/persons", { ...params, ...getLabIncludeParam() }),
   togglePersonFocus: (personId: number, is_focused: number) => http.put(`/persons/${personId}/focus`, { is_focused }),
+  exportPersons: (params: { keyword?: string; is_focused?: number }) =>
+    http.download("/persons/export", { ...params, ...getLabIncludeParam() }, "anonymous_persons.csv"),
   logs: (params: { module_code?: string; operation_type?: string; keyword?: string; start_time?: string; end_time?: string; page: number; size: number }) =>
     http.get<PageData<LogItem>>("/logs", params),
   exportLogs: (params: { module_code?: string; operation_type?: string; keyword?: string; start_time?: string; end_time?: string }) =>
@@ -530,7 +535,7 @@ export const api = {
   createRole: (body: { type_name: string; type_desc?: string }) => http.post<{ type_id: number }>("/system/roles", body),
   dataIndex: () => http.get<DataIndexSummary>("/dashboard/data-index"),
   personDetail: (personId: number) => http.get<PersonDetail>(`/persons/${personId}`),
-  exportBehaviors: (params: { type_id?: number; severity_id?: number; status_id?: number; camera_id?: number; keyword?: string }) =>
+  exportBehaviors: (params: { type_id?: number; severity_id?: number; status_id?: number; camera_id?: number; region_name?: string; start_time?: string; end_time?: string; keyword?: string }) =>
     http.download("/behaviors/export", params, "abnormal_behaviors.csv"),
   exportTracks: (params: { chain_status?: number; keyword?: string; start_time?: string; end_time?: string }) =>
     http.download("/tracks/export", params, "track_chains.csv"),

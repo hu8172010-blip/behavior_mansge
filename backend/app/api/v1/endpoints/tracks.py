@@ -95,7 +95,7 @@ async def list_tracks(
     return ok(page_result(items, total, page, size))
 
 
-@router.get("/{chain_id}")
+@router.get("/{chain_id:int}")
 async def track_detail(chain_id: int, db: AsyncSession = Depends(get_db), _: SysAccount = Depends(get_current_account)):
     chain = (
         await db.execute(select(TrackPassChain).where(TrackPassChain.id == chain_id))

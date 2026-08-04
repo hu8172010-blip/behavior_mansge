@@ -28,6 +28,9 @@ async def list_behaviors(
     severity_id: int | None = Query(default=None),
     status_id: int | None = Query(default=None),
     camera_id: int | None = Query(default=None),
+    region_name: str | None = Query(default=None),
+    start_time: datetime | None = Query(default=None, description="检出时间起始（含）"),
+    end_time: datetime | None = Query(default=None, description="检出时间截止（含）"),
     keyword: str | None = Query(default=None),
     include_lab: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
@@ -59,7 +62,7 @@ async def list_behaviors(
     )
     count_stmt = select(func.count()).select_from(FaAbnormalBehavior).join(
         DmBehaviorType, DmBehaviorType.behavior_type_id == FaAbnormalBehavior.behavior_type_id
-    )
+    ).outerjoin(Device, Device.id == FaAbnormalBehavior.camera_id)
     filters = [FaAbnormalBehavior.is_lab == 0] if not include_lab else []
     if type_id is not None:
         filters.append(FaAbnormalBehavior.behavior_type_id == type_id)
@@ -69,6 +72,12 @@ async def list_behaviors(
         filters.append(FaAbnormalBehavior.alert_status_id == status_id)
     if camera_id is not None:
         filters.append(FaAbnormalBehavior.camera_id == camera_id)
+    if region_name:
+        filters.append(Device.region_name == region_name)
+    if start_time is not None:
+        filters.append(FaAbnormalBehavior.detected_at >= start_time)
+    if end_time is not None:
+        filters.append(FaAbnormalBehavior.detected_at <= end_time)
     if keyword:
         like = f"%{keyword}%"
         filters.append(or_(DmBehaviorType.type_name.like(like), FaAbnormalBehavior.description.like(like)))
@@ -107,6 +116,9 @@ async def export_behaviors(
     severity_id: int | None = Query(default=None),
     status_id: int | None = Query(default=None),
     camera_id: int | None = Query(default=None),
+    region_name: str | None = Query(default=None),
+    start_time: datetime | None = Query(default=None, description="检出时间起始（含）"),
+    end_time: datetime | None = Query(default=None, description="检出时间截止（含）"),
     keyword: str | None = Query(default=None),
     include_lab: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
@@ -141,6 +153,12 @@ async def export_behaviors(
         filters.append(FaAbnormalBehavior.alert_status_id == status_id)
     if camera_id is not None:
         filters.append(FaAbnormalBehavior.camera_id == camera_id)
+    if region_name:
+        filters.append(Device.region_name == region_name)
+    if start_time is not None:
+        filters.append(FaAbnormalBehavior.detected_at >= start_time)
+    if end_time is not None:
+        filters.append(FaAbnormalBehavior.detected_at <= end_time)
     if keyword:
         like = f"%{keyword}%"
         filters.append(or_(DmBehaviorType.type_name.like(like), FaAbnormalBehavior.description.like(like)))

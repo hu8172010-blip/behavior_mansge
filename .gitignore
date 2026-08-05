@@ -23,3 +23,6 @@ temp_test.mp4
 
 # 数据备份产物
 backend/data_backups/
+
+# 后端运行时产物（模拟实验识别结果等）
+backend/storage/

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import alerts, auth, backups, behaviors, dashboard, devices, health, inference, lab, logs, meta, persons, system, tracks, workorders, ws
+from app.api.v1.endpoints import alerts, auth, backups, behaviors, dashboard, devices, health, lab, logs, meta, persons, system, tracks, workorders, ws
 
 api_router = APIRouter()
 api_router.include_router(health.router, prefix="/system", tags=["system"])
@@ -17,5 +17,4 @@ api_router.include_router(logs.router, prefix="/logs", tags=["logs"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
 api_router.include_router(ws.router, prefix="/ws", tags=["ws"])
 api_router.include_router(lab.router, prefix="/lab", tags=["lab"])
-api_router.include_router(inference.router, prefix="/inference", tags=["inference"])
 api_router.include_router(backups.router, prefix="/backups", tags=["backups"])

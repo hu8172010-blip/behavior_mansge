@@ -358,35 +358,8 @@ export interface PersonDetail extends PersonItem {
   }[];
 }
 
-export interface AnalyzeResult {
-  result: {
-    events: any[];
-    tracks: any[];
-    summary: any;
-  };
-  record_id: number | null;
-  counts?: {
-    behavior_count: number;
-    alert_count: number;
-    work_order_count: number;
-  };
-}
-
-export interface LabJobCreateResult {
-  job_id: string;
-  record_id: number | null;
-}
-
-export interface LabJobStatus {
-  job_id: string;
-  status: string;
-  progress: number;
-  result: any;
-  error: string | null;
-  published: boolean;
-}
-
-export interface LabPublishResult {
+export interface LabPublishResponse {
+  record_id: number;
   published: boolean;
   counts: {
     behavior_count: number;
@@ -541,34 +514,9 @@ export const api = {
     http.download("/tracks/export", params, "track_chains.csv"),
   exportAlerts: (params: { status_id?: number; severity_id?: number; keyword?: string }) =>
     http.download("/alerts/export", params, "behavior_alerts.csv"),
-  labAnalyze: (video: File, device_id: number, calibration: string, mode: "temp" | "persist", record_name?: string) => {
-    const form = new FormData();
-    form.append("video", video);
-    form.append("device_id", String(device_id));
-    form.append("calibration", calibration);
-    form.append("mode", mode);
-    if (record_name) form.append("record_name", record_name);
-    return http.upload<AnalyzeResult>("/lab/analyze", form);
-  },
-  labJobCreate: (video: File, device_id: number, calibration: string, mode: "temp" | "persist" = "temp", record_name?: string) => {
-    const form = new FormData();
-    form.append("video", video);
-    form.append("device_id", String(device_id));
-    form.append("calibration", calibration);
-    form.append("mode", mode);
-    if (record_name) form.append("record_name", record_name);
-    return http.upload<LabJobCreateResult>("/lab/jobs", form);
-  },
-  labJobGet: (job_id: string) => http.get<LabJobStatus>(`/lab/jobs/${job_id}`),
-  labJobPublish: (job_id: string) => http.post<LabPublishResult>(`/lab/jobs/${job_id}/publish`),
+  labPublishResult: (body: { device_id?: number; record_name?: string; video_filename?: string; result: any }) =>
+    http.post<LabPublishResponse>("/lab/publish", body),
   labClearSandbox: () => http.post<{ cleared: boolean }>("/lab/clear-sandbox"),
-  inferenceJob: (video: File, device_id: number, calibration: string) => {
-    const form = new FormData();
-    form.append("video", video);
-    form.append("device_id", String(device_id));
-    form.append("calibration", calibration);
-    return http.upload<{ behavior_count: number; alert_count: number; work_order_count: number }>("/inference/jobs", form);
-  },
   labRecords: (params: { page: number; size: number }) => http.get<PageData<LabRecordItem>>("/lab/records", params),
   labRecordDetail: (id: number) => http.get<LabRecordDetail>(`/lab/records/${id}`),
   labRecordPublish: (id: number) => http.post<{ published: boolean }>(`/lab/records/${id}/publish`),

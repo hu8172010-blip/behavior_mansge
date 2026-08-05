@@ -382,6 +382,19 @@ async def verify_model_video(
             }
         )
 
+    # 真正尝试访问视频流，确认文件没有仅被标记存在但实际已删除
+    stream_url = f"{settings.anomaly_tracker_url}{video_url}"
+    async with client.stream("GET", stream_url) as stream:
+        if stream.status_code >= 400:
+            return ok(
+                {
+                    "exists": False,
+                    "reason": "video_unavailable",
+                    "message": "视频资源已过期清理，无法回放查看",
+                    "video_url": None,
+                }
+            )
+
     return ok(
         {
             "exists": True,

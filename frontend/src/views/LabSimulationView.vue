@@ -296,6 +296,7 @@ const reidMessage = ref("");
 const reidMessageType = ref<"info" | "success" | "error">("info");
 
 const reidWorking = computed(() => reidPhase.value === "working" || reidPhase.value === "resolving");
+const reidPublishing = ref(false);
 const reidUnavailable = computed(() => reidResult.value?.reid_status === "unavailable");
 const reidCanStart = computed(
   () =>
@@ -305,10 +306,18 @@ const reidCanStart = computed(
     selectedReidDeviceB.value != null &&
     selectedReidDeviceA.value !== selectedReidDeviceB.value &&
     !reidWorking.value &&
+    !reidPublishing.value &&
     !modelOffline.value
 );
 const reidCanClean = computed(
-  () => !!reidCollectionId.value && (reidPhase.value === "done" || reidPhase.value === "failed")
+  () => !!reidCollectionId.value && (reidPhase.value === "done" || reidPhase.value === "failed") && !reidPublishing.value
+);
+const reidCanPublish = computed(
+  () =>
+    !!reidResult.value &&
+    reidPhase.value === "done" &&
+    reidResult.value.reid_status !== "unavailable" &&
+    !reidPublishing.value
 );
 
 function onReidFileChange(which: "A" | "B", e: Event) {
@@ -390,6 +399,37 @@ function resetReid() {
   reidResult.value = null;
   reidPhase.value = "idle";
   reidMessage.value = "";
+}
+
+async function publishReidRecord() {
+  if (!reidResult.value || reidResult.value.reid_status === "unavailable" || reidPublishing.value) return;
+  if (selectedReidDeviceA.value == null || selectedReidDeviceB.value == null) {
+    reidMessage.value = "请分别为两段视频选择对应的摄像头";
+    reidMessageType.value = "error";
+    return;
+  }
+  reidPublishing.value = true;
+  reidMessage.value = "正在发布到业务库...";
+  reidMessageType.value = "info";
+  try {
+    const data = await api.labPublishResult({
+      device_ids: [selectedReidDeviceA.value, selectedReidDeviceB.value],
+      record_name: `ReID-${reidFileA.value?.name || "A"} / ${reidFileB.value?.name || "B"}`,
+      video_filename: reidFileA.value?.name || "",
+      video_filename_b: reidFileB.value?.name || "",
+      video_url: reidJobA.value.id ? modelJobVideoUrl(reidJobA.value.id) : "",
+      video_url_b: reidJobB.value.id ? modelJobVideoUrl(reidJobB.value.id) : "",
+      result: reidResult.value,
+    });
+    const c = (data as any).counts;
+    reidMessage.value = `成功发布到业务！记录 ID：${(data as any).record_id}。\n生成：异常行为 ${c.behavior_count} 条、预警 ${c.alert_count} 条。\n请关闭“过滤模拟数据”后在异常行为/告警/轨迹列表中查看。`;
+    reidMessageType.value = "success";
+  } catch (e: any) {
+    reidMessage.value = "发布失败：" + (e?.message || "未知错误");
+    reidMessageType.value = "error";
+  } finally {
+    reidPublishing.value = false;
+  }
 }
 
 async function deleteReidCollection() {
@@ -811,6 +851,12 @@ onBeforeUnmount(() => {
               <div class="panel-title"><h3>标注视频：{{ v.original_name }}</h3></div>
               <video v-if="v.status === 'completed'" :src="modelJobVideoUrl(v.job_id)" controls style="width: 100%; max-height: 360px"></video>
             </div>
+          </div>
+
+          <div class="toolbar" style="margin-top: 12px">
+            <button class="success" :disabled="!reidCanPublish" @click="publishReidRecord">
+              {{ reidPublishing ? "发布中..." : "发布到业务" }}
+            </button>
           </div>
         </template>
       </template>

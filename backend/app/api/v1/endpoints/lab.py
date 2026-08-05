@@ -21,7 +21,7 @@ from app.models import (
     TrackPassChain,
 )
 from app.schemas.common import ok, page_result
-from app.services.ingest import ingest_anomaly_result
+from app.services.ingest import ingest_anomaly_result, ingest_collection_result
 
 router = APIRouter()
 
@@ -62,6 +62,15 @@ async def publish_model_result(
     camera_a = int(raw_device_ids[0])
     camera_b = int(raw_device_ids[1]) if is_dual else None
 
+    is_collection = "persons" in result
+    if is_collection:
+        persons = result.get("persons") or []
+        event_count = sum(len(p.get("events") or []) for p in persons) or len(persons)
+        track_count = len(persons)
+    else:
+        event_count = len(result.get("events") or [])
+        track_count = len(result.get("tracks") or [])
+
     record = LabRecord(
         record_name=record_name,
         account_id=account.account_id,
@@ -74,8 +83,8 @@ async def publish_model_result(
         video_path_b=payload.get("video_url_b") or "",
         result_path="",
         model_version=None,
-        event_count=len(result.get("events") or []),
-        track_count=len(result.get("tracks") or []),
+        event_count=event_count,
+        track_count=track_count,
         status=1,
         is_published=0,
     )
@@ -91,18 +100,30 @@ async def publish_model_result(
     result_path.write_text(content, encoding="utf-8")
     record.result_path = str(result_path)
 
-    counts = await ingest_anomaly_result(
-        db,
-        result,
-        device_id=camera_a,
-        account_id=account.account_id,
-        device_ids=[int(d) for d in raw_device_ids],
-        lab_record_id=record.record_id,
-        video_path=record.video_path,
-        video_path_b=record.video_path_b,
-        create_work_orders=False,
-        is_lab=True,
-    )
+    if is_collection:
+        counts = await ingest_collection_result(
+            db,
+            result,
+            device_ids=[int(d) for d in raw_device_ids],
+            account_id=account.account_id,
+            lab_record_id=record.record_id,
+            video_path=record.video_path,
+            video_path_b=record.video_path_b,
+            is_lab=True,
+        )
+    else:
+        counts = await ingest_anomaly_result(
+            db,
+            result,
+            device_id=camera_a,
+            account_id=account.account_id,
+            device_ids=[int(d) for d in raw_device_ids],
+            lab_record_id=record.record_id,
+            video_path=record.video_path,
+            video_path_b=record.video_path_b,
+            create_work_orders=False,
+            is_lab=True,
+        )
     record.is_published = 1
     record.published_at = datetime.now()
     await db.commit()

@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_account
@@ -71,6 +71,13 @@ def row_to_dict(row) -> dict:
 @router.get("")
 async def list_orders(
     status_id: int | None = Query(default=None),
+    severity_id: int | None = Query(default=None),
+    type_id: int | None = Query(default=None),
+    assignee_id: int | None = Query(default=None),
+    assignee_name: str | None = Query(default=None, description="按处理人姓名模糊搜索"),
+    keyword: str | None = Query(default=None, description="工单号/描述模糊搜索"),
+    start_time: datetime | None = Query(default=None, description="派单时间起始（含）"),
+    end_time: datetime | None = Query(default=None, description="派单时间截止（含）"),
     include_lab: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
@@ -78,18 +85,109 @@ async def list_orders(
     _: SysAccount = Depends(get_current_account),
 ):
     stmt = order_select()
-    count_stmt = select(func.count()).select_from(FaWorkOrder)
+    count_stmt = select(func.count()).select_from(FaWorkOrder) \
+        .join(FaAbnormalBehavior, FaAbnormalBehavior.behavior_id == FaWorkOrder.behavior_id) \
+        .join(SysAccount, SysAccount.account_id == FaWorkOrder.assigned_to)
     if not include_lab:
         stmt = stmt.where(FaWorkOrder.is_lab == 0)
         count_stmt = count_stmt.where(FaWorkOrder.is_lab == 0)
     if status_id is not None:
         stmt = stmt.where(FaWorkOrder.work_order_status_id == status_id)
         count_stmt = count_stmt.where(FaWorkOrder.work_order_status_id == status_id)
+    if severity_id is not None:
+        stmt = stmt.where(FaAbnormalBehavior.severity_level_id == severity_id)
+        count_stmt = count_stmt.where(FaAbnormalBehavior.severity_level_id == severity_id)
+    if type_id is not None:
+        stmt = stmt.where(FaAbnormalBehavior.behavior_type_id == type_id)
+        count_stmt = count_stmt.where(FaAbnormalBehavior.behavior_type_id == type_id)
+    if assignee_id is not None:
+        stmt = stmt.where(FaWorkOrder.assigned_to == assignee_id)
+        count_stmt = count_stmt.where(FaWorkOrder.assigned_to == assignee_id)
+    if assignee_name:
+        like = f"%{assignee_name}%"
+        stmt = stmt.where(SysAccount.real_name.like(like))
+        count_stmt = count_stmt.where(SysAccount.real_name.like(like))
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(or_(FaWorkOrder.work_order_no.like(like), FaAbnormalBehavior.description.like(like)))
+        count_stmt = count_stmt.where(or_(FaWorkOrder.work_order_no.like(like), FaAbnormalBehavior.description.like(like)))
+    if start_time:
+        stmt = stmt.where(FaWorkOrder.assigned_at >= start_time)
+        count_stmt = count_stmt.where(FaWorkOrder.assigned_at >= start_time)
+    if end_time:
+        stmt = stmt.where(FaWorkOrder.assigned_at <= end_time)
+        count_stmt = count_stmt.where(FaWorkOrder.assigned_at <= end_time)
     total = (await db.execute(count_stmt)).scalar_one()
     rows = (
         await db.execute(stmt.order_by(FaWorkOrder.assigned_at.desc()).offset((page - 1) * size).limit(size))
     ).all()
     return ok(page_result([row_to_dict(row) for row in rows], total, page, size))
+
+
+@router.get("/export")
+async def export_orders(
+    status_id: int | None = Query(default=None),
+    severity_id: int | None = Query(default=None),
+    type_id: int | None = Query(default=None),
+    assignee_id: int | None = Query(default=None),
+    assignee_name: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    start_time: datetime | None = Query(default=None),
+    end_time: datetime | None = Query(default=None),
+    include_lab: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+    _: SysAccount = Depends(get_current_account),
+):
+    import csv
+    import io
+
+    stmt = order_select()
+    if not include_lab:
+        stmt = stmt.where(FaWorkOrder.is_lab == 0)
+    if status_id is not None:
+        stmt = stmt.where(FaWorkOrder.work_order_status_id == status_id)
+    if severity_id is not None:
+        stmt = stmt.where(FaAbnormalBehavior.severity_level_id == severity_id)
+    if type_id is not None:
+        stmt = stmt.where(FaAbnormalBehavior.behavior_type_id == type_id)
+    if assignee_id is not None:
+        stmt = stmt.where(FaWorkOrder.assigned_to == assignee_id)
+    if assignee_name:
+        stmt = stmt.where(SysAccount.real_name.like(f"%{assignee_name}%"))
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(or_(FaWorkOrder.work_order_no.like(like), FaAbnormalBehavior.description.like(like)))
+    if start_time:
+        stmt = stmt.where(FaWorkOrder.assigned_at >= start_time)
+    if end_time:
+        stmt = stmt.where(FaWorkOrder.assigned_at <= end_time)
+    rows = (await db.execute(stmt.order_by(FaWorkOrder.assigned_at.desc()).limit(5000))).all()
+
+    buffer = io.StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["工单号", "事件类型", "级别", "处理人", "派单时间", "处置时间", "状态", "描述", "处置结果"])
+    for row in rows:
+        d = row_to_dict(row)
+        writer.writerow([
+            d["work_order_no"],
+            d["type_name"],
+            d["level_name"],
+            d["assignee_name"] or "",
+            d["assigned_at"] or "",
+            d["handled_at"] or "",
+            d["status_name"] or "",
+            (d["description"] or "").replace("\n", " "),
+            (d["handle_result"] or "").replace("\n", " "),
+        ])
+    buffer.seek(0)
+    filename = f"work_orders_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/{work_order_id}")

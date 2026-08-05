@@ -442,6 +442,7 @@ async def list_repair_orders(
     keyword: str | None = Query(default=None),
     fault_id: int | None = Query(default=None),
     assigned_to: int | None = Query(default=None),
+    assigned_name: str | None = Query(default=None, description="按维修负责人姓名模糊搜索"),
     start_time: str | None = Query(default=None),
     end_time: str | None = Query(default=None),
     only_mine: bool = Query(default=False),
@@ -465,6 +466,9 @@ async def list_repair_orders(
     if assigned_to is not None:
         stmt = stmt.where(RepairOrder.assigned_to == assigned_to)
         count_stmt = count_stmt.where(RepairOrder.assigned_to == assigned_to)
+    if assigned_name:
+        stmt = stmt.join(SysAccount, SysAccount.account_id == RepairOrder.assigned_to).where(SysAccount.real_name.like(f"%{assigned_name}%"))
+        count_stmt = count_stmt.join(SysAccount, SysAccount.account_id == RepairOrder.assigned_to).where(SysAccount.real_name.like(f"%{assigned_name}%"))
     if only_mine:
         stmt = stmt.where(RepairOrder.assigned_to == account.account_id)
         count_stmt = count_stmt.where(RepairOrder.assigned_to == account.account_id)

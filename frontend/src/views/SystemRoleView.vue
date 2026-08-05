@@ -105,16 +105,88 @@ onMounted(loadRoles);
     </div>
 
     <div v-if="showCreate" class="modal-mask" @click.self="showCreate = false">
-      <div class="modal">
+      <div class="modal wide">
         <button class="close" @click="showCreate = false">×</button>
         <h2>新增角色</h2>
-        <label>角色名称</label>
-        <input v-model="form.type_name" placeholder="如：实习生" />
-        <label>角色描述（可选）</label>
-        <input v-model="form.type_desc" placeholder="简要说明该角色职责" />
-        <button class="primary" :disabled="submitting" @click="submitCreate">确认创建</button>
+        <div class="form-grid">
+          <div class="form-cell full">
+            <label>角色名称</label>
+            <input v-model="form.type_name" placeholder="如：实习生" />
+          </div>
+          <div class="form-cell full">
+            <label>角色描述（可选）</label>
+            <input v-model="form.type_desc" placeholder="简要说明该角色职责" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button @click="showCreate = false">取消</button>
+          <button class="primary" :disabled="submitting" @click="submitCreate">确认创建</button>
+        </div>
       </div>
     </div>
 
   </div>
 </template>
+
+<style scoped>
+/* 角色弹窗：宽屏+两列布局 */
+.modal.wide {
+  width: 560px;
+  max-width: 92%;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin: 16px 0;
+}
+.form-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.form-cell.full {
+  grid-column: 1 / -1;
+}
+.form-cell label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.form-cell input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dbe3ed;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #35465e;
+  box-sizing: border-box;
+  outline: 0;
+}
+.form-cell input:focus {
+  border-color: #3788e8;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eef2f8;
+}
+.form-actions .primary {
+  height: 36px;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #fff;
+  background: #3788e8;
+  border-radius: 5px;
+}
+.form-actions button:not(.primary) {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  border: 1px solid #dbe3ed;
+  border-radius: 5px;
+  background: #fff;
+  color: #65748a;
+}
+</style>

@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { api, type TrackChainItem } from "../api";
+import { useSettingsStore } from "../stores/settings";
+const settings = useSettingsStore();
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 import PersonDetailModal from "../components/PersonDetailModal.vue";
 
@@ -44,6 +46,15 @@ function search() {
   loadTracks();
 }
 
+function resetTrackFilter() {
+  keyword.value = "";
+  chainStatus.value = undefined;
+  startTime.value = "";
+  endTime.value = "";
+  page.value = 1;
+  loadTracks();
+}
+
 function goToPage() {
   const maxPage = Math.max(1, Math.ceil(total.value / size));
   let p = Number(jumpPage.value);
@@ -79,6 +90,7 @@ function formatDuration(sec: number): string {
 }
 
 onMounted(loadTracks);
+watch(() => settings.filterLabData, () => loadTracks());
 </script>
 
 <template>
@@ -100,6 +112,7 @@ onMounted(loadTracks);
         <input v-model="startTime" type="datetime-local" style="max-width:190px" />
         <input v-model="endTime" type="datetime-local" style="max-width:190px" />
         <button class="primary" @click="search">查询</button>
+        <button @click="resetTrackFilter">重置</button>
         <button :disabled="exporting" @click="exportData">{{ exporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">

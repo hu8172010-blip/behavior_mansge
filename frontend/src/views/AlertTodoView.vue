@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api, type AlertItem, type MetaEnums, type WorkOrderItem } from "../api";
 import { useAuthStore } from "../stores/auth";
+import { useSettingsStore } from "../stores/settings";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 
 const router = useRouter();
 const auth = useAuthStore();
+const settings = useSettingsStore();
 
 const activeTab = ref<"alerts" | "orders">("alerts");
 const enums = ref<MetaEnums | null>(null);
@@ -21,13 +23,23 @@ const alertSize = 10;
 const alertTotal = ref(0);
 const alerts = ref<AlertItem[]>([]);
 const alertsLoading = ref(false);
+const alertJump = ref<number | null>(null);
 
 const orderStatusId = ref<number | undefined>(undefined);
+const orderSeverityId = ref<number | undefined>(undefined);
+const orderTypeId = ref<number | undefined>(undefined);
+const orderAssigneeId = ref<number | undefined>(undefined);
+const orderAssigneeInput = ref("");
+const orderKeyword = ref("");
+const orderStartTime = ref("");
+const orderEndTime = ref("");
 const orderPage = ref(1);
 const orderSize = 10;
 const orderTotal = ref(0);
 const orders = ref<WorkOrderItem[]>([]);
 const ordersLoading = ref(false);
+const orderJump = ref<number | null>(null);
+const orderExporting = ref(false);
 
 const showIgnore = ref(false);
 const showAssign = ref(false);
@@ -55,6 +67,7 @@ async function exportAlerts() {
   exporting.value = true;
   try {
     await api.exportAlerts({ status_id: alertStatusId.value, severity_id: alertSeverityId.value, keyword: alertKeyword.value || undefined });
+    notice.value = "告警已导出为 CSV 文件";
   } catch (error: any) {
     errorText.value = error.message;
   } finally {
@@ -65,13 +78,47 @@ async function exportAlerts() {
 async function loadOrders() {
   ordersLoading.value = true;
   try {
-    const result = await api.workOrders({ status_id: orderStatusId.value, page: orderPage.value, size: orderSize });
+    const assigneeName = orderAssigneeInput.value.trim();
+    const result = await api.workOrders({
+      status_id: orderStatusId.value,
+      severity_id: orderSeverityId.value,
+      type_id: orderTypeId.value,
+      assignee_id: orderAssigneeId.value,
+      assignee_name: !orderAssigneeId.value && assigneeName ? assigneeName : undefined,
+      keyword: orderKeyword.value || undefined,
+      start_time: orderStartTime.value ? orderStartTime.value.replace("T", " ") : undefined,
+      end_time: orderEndTime.value ? orderEndTime.value.replace("T", " ") : undefined,
+      page: orderPage.value,
+      size: orderSize,
+    });
     orders.value = result.list;
     orderTotal.value = result.total;
   } catch (error: any) {
     errorText.value = error.message;
   } finally {
     ordersLoading.value = false;
+  }
+}
+
+async function exportOrders() {
+  orderExporting.value = true;
+  try {
+    const assigneeName = orderAssigneeInput.value.trim();
+    await api.exportWorkOrders({
+      status_id: orderStatusId.value,
+      severity_id: orderSeverityId.value,
+      type_id: orderTypeId.value,
+      assignee_id: orderAssigneeId.value,
+      assignee_name: !orderAssigneeId.value && assigneeName ? assigneeName : undefined,
+      keyword: orderKeyword.value || undefined,
+      start_time: orderStartTime.value ? orderStartTime.value.replace("T", " ") : undefined,
+      end_time: orderEndTime.value ? orderEndTime.value.replace("T", " ") : undefined,
+    });
+    notice.value = "工单已导出为 CSV 文件";
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    orderExporting.value = false;
   }
 }
 
@@ -84,6 +131,57 @@ function searchOrders() {
   orderPage.value = 1;
   loadOrders();
 }
+
+function resetAlertFilter() {
+  alertStatusId.value = 1;
+  alertSeverityId.value = undefined;
+  alertKeyword.value = "";
+  alertPage.value = 1;
+  alertJump.value = null;
+  loadAlerts();
+}
+
+function resetOrderFilter() {
+  orderStatusId.value = undefined;
+  orderSeverityId.value = undefined;
+  orderTypeId.value = undefined;
+  orderAssigneeId.value = undefined;
+  orderAssigneeInput.value = "";
+  orderKeyword.value = "";
+  orderStartTime.value = "";
+  orderEndTime.value = "";
+  orderPage.value = 1;
+  orderJump.value = null;
+  loadOrders();
+}
+
+function goToAlertPage() {
+  const maxPage = Math.max(1, Math.ceil(alertTotal.value / alertSize));
+  let p = Number(alertJump.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  if (p === alertPage.value) return;
+  alertPage.value = p;
+  alertJump.value = null;
+  loadAlerts();
+}
+
+function goToOrderPage() {
+  const maxPage = Math.max(1, Math.ceil(orderTotal.value / orderSize));
+  let p = Number(orderJump.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  if (p === orderPage.value) return;
+  orderPage.value = p;
+  orderJump.value = null;
+  loadOrders();
+}
+
+// 顶部"过滤模拟数据"开关切换时，自动刷新两个 Tab
+watch(() => settings.filterLabData, () => {
+  if (activeTab.value === "alerts") loadAlerts();
+  else loadOrders();
+});
 
 async function confirmAlert(item: AlertItem) {
   submitting.value = true;
@@ -178,7 +276,7 @@ onMounted(async () => {
 
     <div v-if="activeTab === 'alerts'" class="panel data-panel">
       <div class="toolbar">
-        <div class="search"><span>⌕</span><input v-model="alertKeyword" placeholder="搜索事件类型或描述关键字" @keyup.enter="searchAlerts" /></div>
+        <div class="search"><span>⌕</span><input v-model="alertKeyword" placeholder="搜索事件类型/描述/位置/设备" @keyup.enter="searchAlerts" /></div>
         <select v-model="alertStatusId" @change="searchAlerts">
           <option :value="undefined">全部状态</option>
           <option v-for="item in enums?.alert_statuses || []" :key="item.id" :value="item.id">{{ item.name }}</option>
@@ -188,6 +286,7 @@ onMounted(async () => {
           <option v-for="item in enums?.severity_levels || []" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select>
         <button class="primary" @click="searchAlerts">查询</button>
+        <button @click="resetAlertFilter">重置</button>
         <button :disabled="exporting" @click="exportAlerts">{{ exporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">
@@ -208,21 +307,43 @@ onMounted(async () => {
           </span>
         </div>
       </div>
-      <div class="toolbar" style="margin-top: 12px">
+      <div class="pager">
         <span>共 {{ alertTotal }} 条</span>
         <button :disabled="alertPage <= 1" @click="alertPage--; loadAlerts()">上一页</button>
-        <span>第 {{ alertPage }} 页</span>
+        <span>第 {{ alertPage }} 页 / 共 {{ Math.max(1, Math.ceil(alertTotal / alertSize)) }} 页</span>
         <button :disabled="alertPage * alertSize >= alertTotal" @click="alertPage++; loadAlerts()">下一页</button>
+        <span style="margin-left: 8px">跳转到</span>
+        <input v-model.number="alertJump" type="number" min="1" :max="Math.max(1, Math.ceil(alertTotal / alertSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goToAlertPage" />
+        <span>页</span>
+        <button @click="goToAlertPage" :disabled="!alertJump">GO</button>
       </div>
     </div>
 
     <div v-else class="panel data-panel">
-      <div class="toolbar">
+      <!-- 第一行：核心搜索条件 + 查询 -->
+      <div class="toolbar toolbar-row">
+        <div class="search"><span>⌕</span><input v-model="orderKeyword" placeholder="搜索工单号/描述" @keyup.enter="searchOrders" /></div>
         <select v-model="orderStatusId" @change="searchOrders">
           <option :value="undefined">全部状态</option>
           <option v-for="item in enums?.work_order_statuses || []" :key="item.id" :value="item.id">{{ item.name }}</option>
         </select>
+        <select v-model="orderSeverityId" @change="searchOrders">
+          <option :value="undefined">全部级别</option>
+          <option v-for="item in enums?.severity_levels || []" :key="item.id" :value="item.id">{{ item.name }}</option>
+        </select>
+        <select v-model="orderTypeId" @change="searchOrders">
+          <option :value="undefined">全部事件类型</option>
+          <option v-for="item in enums?.behavior_types || []" :key="item.id" :value="item.id">{{ item.name }}</option>
+        </select>
+        <input v-model="orderAssigneeInput" type="text" placeholder="输入姓名搜索处理人" @keyup.enter="searchOrders" style="width: 180px; height: 32px; padding: 0 10px; border: 1px solid #dbe3ed; border-radius: 4px; outline: 0;" />
         <button class="primary" @click="searchOrders">查询</button>
+      </div>
+      <!-- 第二行：时间筛选 + 重置 + 导出 -->
+      <div class="toolbar toolbar-row toolbar-row-2">
+        <input v-model="orderStartTime" type="date" style="width: 150px; height: 32px; padding: 0 8px; border: 1px solid #dbe3ed; border-radius: 4px;" title="派单时间起" @change="searchOrders" />
+        <input v-model="orderEndTime" type="date" style="width: 150px; height: 32px; padding: 0 8px; border: 1px solid #dbe3ed; border-radius: 4px;" title="派单时间止" @change="searchOrders" />
+        <button @click="resetOrderFilter">重置</button>
+        <button :disabled="orderExporting" @click="exportOrders">{{ orderExporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">
         <div class="table-head"><span>工单号</span><span>事件类型</span><span>级别</span><span>处理人</span><span>派单时间</span><span>状态</span><span>操作</span></div>
@@ -238,11 +359,15 @@ onMounted(async () => {
           <span><button class="link" @click="router.push('/workorder/detail/' + item.work_order_id)">查看详情</button></span>
         </div>
       </div>
-      <div class="toolbar" style="margin-top: 12px">
+      <div class="pager">
         <span>共 {{ orderTotal }} 条</span>
         <button :disabled="orderPage <= 1" @click="orderPage--; loadOrders()">上一页</button>
-        <span>第 {{ orderPage }} 页</span>
+        <span>第 {{ orderPage }} 页 / 共 {{ Math.max(1, Math.ceil(orderTotal / orderSize)) }} 页</span>
         <button :disabled="orderPage * orderSize >= orderTotal" @click="orderPage++; loadOrders()">下一页</button>
+        <span style="margin-left: 8px">跳转到</span>
+        <input v-model.number="orderJump" type="number" min="1" :max="Math.max(1, Math.ceil(orderTotal / orderSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goToOrderPage" />
+        <span>页</span>
+        <button @click="goToOrderPage" :disabled="!orderJump">GO</button>
       </div>
     </div>
 
@@ -273,3 +398,6 @@ onMounted(async () => {
     <TrackDetailModal v-if="detailChainId" :chain-id="detailChainId" @close="detailChainId = null" />
   </div>
 </template>
+
+<style scoped>
+</style>

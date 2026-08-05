@@ -1,6 +1,6 @@
 <template>
   <div class="modal-mask" v-if="visible" @click.self="close">
-    <div class="modal-box repair-modal">
+    <div class="modal repair-modal">
       <div class="modal-header">
         <h3>维修工单详情 {{ detail ? `- ${detail.order_no}` : "" }}</h3>
         <button class="modal-close" @click="close">&times;</button>
@@ -220,7 +220,45 @@ function close() {
   max-width: 760px;
   width: 92%;
   max-height: 86vh;
+  padding: 0;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 20px 50px #182b4566;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.repair-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e8edf3;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.repair-modal .modal-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #25364d;
+}
+.repair-modal .modal-close {
+  font-size: 20px;
+  line-height: 1;
+  color: #93a0af;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.repair-modal .modal-close:hover {
+  color: #e76b71;
+}
+.repair-modal .modal-body {
+  padding: 18px 20px;
+  background: #fff;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 .info-grid {
   display: grid;

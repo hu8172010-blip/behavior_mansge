@@ -2,10 +2,10 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type AlertItem, type MetaEnums, type WorkOrderItem } from "../api";
+import dayjs from "dayjs";
 import { useAuthStore } from "../stores/auth";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 import { formatBehaviorDesc } from "../utils/behaviorDisplay";
-import { modelGetJob } from "../api/model";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -145,31 +145,101 @@ function extractVideoJobId(url: string | null): string | null {
   return match ? match[1] : null;
 }
 
-async function openVideo(item: AlertItem | null) {
+const showVideoPlayer = ref(false);
+const videoPlayerAlert = ref<AlertItem | null>(null);
+const videoPlayerList = ref<{ name: string; src: string; jobId: string }[]>([]);
+const videoPlayerLoading = ref(false);
+const videoPlayerError = ref("");
+let videoLoadTimer: number | null = null;
+
+const videoPlayerTitle = computed(() => {
+  const alert = videoPlayerAlert.value;
+  if (!alert) return "视频回放";
+  return `视频回放 - ${alert.device_name || "摄像头"}（${dayjs(alert.alert_time).format("YYYY-MM-DD HH:mm:ss")}）`;
+});
+
+function getVideoJobIds(item: AlertItem): string[] {
+  const ids: string[] = [];
+  if (item.video_job_id) ids.push(item.video_job_id);
+  if (item.is_dual_video && item.video_job_id_b) ids.push(item.video_job_id_b);
+  if (ids.length) return ids;
+  return ([item.video_path, item.video_path_b].filter(Boolean) as string[])
+    .map(extractVideoJobId)
+    .filter(Boolean) as string[];
+}
+
+function onVideoError() {
+  videoPlayerError.value = "视频加载失败，请稍后重试";
+  if (videoLoadTimer) {
+    window.clearTimeout(videoLoadTimer);
+    videoLoadTimer = null;
+  }
+}
+
+function onVideoLoaded() {
+  if (videoLoadTimer) {
+    window.clearTimeout(videoLoadTimer);
+    videoLoadTimer = null;
+  }
+}
+
+async function openVideoPlayer(item: AlertItem | null) {
   if (!item) return;
-  const urls = [item.video_path, item.video_path_b].filter(Boolean) as string[];
-  if (!urls.length) {
-    errorText.value = "未关联原始视频";
-    return;
+  showVideoPlayer.value = true;
+  videoPlayerAlert.value = item;
+  videoPlayerLoading.value = true;
+  videoPlayerError.value = "";
+  videoPlayerList.value = [];
+  if (videoLoadTimer) {
+    window.clearTimeout(videoLoadTimer);
+    videoLoadTimer = null;
   }
-  const jobIds = urls.map(extractVideoJobId).filter(Boolean) as string[];
+
+  const jobIds = getVideoJobIds(item);
   if (!jobIds.length) {
-    errorText.value = "视频地址格式异常，无法回放";
+    videoPlayerLoading.value = false;
+    videoPlayerError.value = "未关联原始视频";
     return;
   }
-  for (const jobId of jobIds) {
+
+  const list: { name: string; src: string; jobId: string }[] = [];
+  for (let i = 0; i < jobIds.length; i++) {
+    const jobId = jobIds[i];
     try {
-      const job = await modelGetJob(jobId);
-      if (!job.video_url) {
-        errorText.value = "视频资源已过期清理，无法回放";
+      const res = await api.verifyVideo(jobId);
+      if (res.exists && res.video_url) {
+        list.push({ name: `摄像头 ${String.fromCharCode(65 + i)}`, src: res.video_url, jobId });
+      } else {
+        videoPlayerLoading.value = false;
+        videoPlayerError.value = res.message || "视频资源已过期清理，无法回放查看";
         return;
       }
-    } catch {
-      errorText.value = "视频资源已过期清理，无法回放";
+    } catch (e: any) {
+      videoPlayerLoading.value = false;
+      videoPlayerError.value = e?.message || "模型推理服务离线，暂时无法查看视频";
       return;
     }
   }
-  urls.forEach((u) => window.open(u, "_blank"));
+
+  videoPlayerList.value = list;
+  videoPlayerLoading.value = false;
+  videoLoadTimer = window.setTimeout(() => {
+    if (videoPlayerList.value.length && !videoPlayerError.value) {
+      videoPlayerError.value = "视频加载失败，请稍后重试";
+    }
+  }, 30000);
+}
+
+function closeVideoPlayer() {
+  showVideoPlayer.value = false;
+  videoPlayerAlert.value = null;
+  videoPlayerList.value = [];
+  videoPlayerError.value = "";
+  videoPlayerLoading.value = false;
+  if (videoLoadTimer) {
+    window.clearTimeout(videoLoadTimer);
+    videoLoadTimer = null;
+  }
 }
 
 async function submitReview() {
@@ -271,7 +341,7 @@ onMounted(async () => {
           <span>{{ item.region_name || "—" }}<br /><small>{{ item.device_name }}</small></span>
           <span>{{ item.status_name }}<br /><small v-if="item.track_id"><button class="link" @click="detailChainId = item.track_id">查看轨迹</button></small></span>
           <span class="row-actions">
-            <button v-if="item.alert_status_id === 1" class="btn-sm" :disabled="submitting || (!item.video_path && !item.video_path_b)" @click="openVideo(item)">查看视频</button>
+            <button v-if="item.alert_status_id === 1" class="btn-sm" :disabled="submitting || (!item.video_path && !item.video_path_b)" @click="openVideoPlayer(item)">查看视频</button>
             <button v-if="item.alert_status_id === 1" class="btn-sm btn-confirm" :disabled="submitting" @click="openReview(item)">人工复核</button>
             <button v-if="item.alert_status_id === 2 && auth.hasPermission('alarm:assign')" class="btn-sm btn-assign" :disabled="submitting" @click="openAssign(item)">派单</button>
             <span v-if="item.alert_status_id >= 3 && item.alert_status_id <= 5">—</span>
@@ -366,11 +436,137 @@ onMounted(async () => {
         </div>
         <div class="toolbar" style="margin-top: 16px">
           <button class="primary" :disabled="submitting" @click="submitReview">确认归档</button>
-          <button :disabled="submitting || (currentReview && !currentReview.video_path && !currentReview.video_path_b)" @click="openVideo(currentReview)">查看视频</button>
+          <button :disabled="submitting || (currentReview && !currentReview.video_path && !currentReview.video_path_b)" @click="openVideoPlayer(currentReview)">查看视频</button>
         </div>
       </div>
     </div>
 
     <TrackDetailModal v-if="detailChainId" :chain-id="detailChainId" @close="detailChainId = null" />
+
+    <div v-if="showVideoPlayer" class="video-modal-mask" @click.self="closeVideoPlayer">
+      <div class="video-modal" @click.stop>
+        <div class="video-modal-header">
+          <h2>{{ videoPlayerTitle }}</h2>
+          <button class="close" @click="closeVideoPlayer">×</button>
+        </div>
+        <div class="video-modal-body">
+          <div v-if="videoPlayerLoading" class="video-status">正在校验视频资源...</div>
+          <div v-else-if="videoPlayerError" class="video-status video-error">{{ videoPlayerError }}</div>
+          <div v-else class="video-players" :class="{ 'video-players-dual': videoPlayerList.length > 1 }">
+            <div v-for="(v, i) in videoPlayerList" :key="v.jobId" class="video-player">
+              <div class="video-player-label">{{ v.name }}</div>
+              <video
+                :src="v.src"
+                controls
+                preload="metadata"
+                style="width: 100%; max-height: 420px; background: #000; border-radius: 4px"
+                @error="onVideoError"
+                @loadeddata="onVideoLoaded"
+              ></video>
+            </div>
+          </div>
+        </div>
+        <div v-if="videoPlayerAlert && !videoPlayerLoading && !videoPlayerError" class="video-modal-footer">
+          <div><b>事件类型：</b>{{ videoPlayerAlert.type_name }}（{{ videoPlayerAlert.level_name }}）</div>
+          <div><b>置信度：</b>{{ videoPlayerAlert.confidence_score != null ? (videoPlayerAlert.confidence_score * 100).toFixed(1) + '%' : '—' }}</div>
+          <div v-if="videoPlayerAlert.description" style="margin-top: 8px; color: #666; font-size: 13px">
+            <b>描述：</b>{{ formatBehaviorDesc(videoPlayerAlert.description, videoPlayerAlert.type_name || '') }}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+.video-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-modal {
+  background: #fff;
+  border-radius: 8px;
+  width: min(960px, 92vw);
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+}
+
+.video-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.video-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.video-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+
+.video-status {
+  text-align: center;
+  padding: 80px 16px;
+  color: #666;
+  font-size: 15px;
+}
+
+.video-error {
+  color: #f56c6c;
+}
+
+.video-players {
+  display: flex;
+  gap: 16px;
+  flex-direction: column;
+}
+
+.video-players-dual {
+  flex-direction: row;
+}
+
+.video-player {
+  flex: 1;
+  min-width: 0;
+}
+
+.video-player-label {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.video-modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e4e7ed;
+  background: #f5f7fa;
+}
+
+.close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #999;
+  cursor: pointer;
+}
+
+.close:hover {
+  color: #333;
+}
+</style>

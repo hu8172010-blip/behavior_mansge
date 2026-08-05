@@ -54,6 +54,8 @@ export interface AlertItem {
   is_dual_video: number;
   video_path: string | null;
   video_path_b: string | null;
+  video_job_id: string | null;
+  video_job_id_b: string | null;
   false_positive: number | null;
   person_identity: string | null;
   reviewed_by: number | null;
@@ -533,9 +535,13 @@ export const api = {
     video_filename_b?: string;
     video_url?: string;
     video_url_b?: string;
+    video_job_id?: string;
+    video_job_id_b?: string;
     result: any;
   }) => http.post<LabPublishResponse>("/lab/publish", body),
   labClearSandbox: () => http.post<{ cleared: boolean }>("/lab/clear-sandbox"),
+  verifyVideo: (jobId: string) =>
+    http.get<{ exists: boolean; reason?: string; message: string; video_url: string | null }>(`/lab/verify-video/${jobId}`),
   labRecords: (params: { page: number; size: number }) => http.get<PageData<LabRecordItem>>("/lab/records", params),
   labRecordDetail: (id: number) => http.get<LabRecordDetail>(`/lab/records/${id}`),
   labRecordPublish: (id: number) => http.post<{ published: boolean }>(`/lab/records/${id}/publish`),

@@ -219,6 +219,7 @@ async function publishRecord() {
       record_name: `模拟-${videoFile.value?.name || "识别结果"}`,
       video_filename: videoFile.value?.name || "",
       video_url: singleJobId.value ? modelJobVideoUrl(singleJobId.value) : "",
+      video_job_id: singleJobId.value || "",
       result: result.value,
     });
     isPublished.value = true;
@@ -419,6 +420,8 @@ async function publishReidRecord() {
       video_filename_b: reidFileB.value?.name || "",
       video_url: reidJobA.value.id ? modelJobVideoUrl(reidJobA.value.id) : "",
       video_url_b: reidJobB.value.id ? modelJobVideoUrl(reidJobB.value.id) : "",
+      video_job_id: reidJobA.value.id || "",
+      video_job_id_b: reidJobB.value.id || "",
       result: reidResult.value,
     });
     const c = (data as any).counts;

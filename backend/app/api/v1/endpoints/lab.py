@@ -1,6 +1,8 @@
 import json
 import shutil
 from datetime import datetime
+
+import httpx
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import get_current_account
 from app.db.session import get_db
 from app.models import (
@@ -81,6 +84,8 @@ async def publish_model_result(
         is_dual_video=1 if is_dual else 0,
         video_path=payload.get("video_url") or "",
         video_path_b=payload.get("video_url_b") or "",
+        video_job_id=payload.get("video_job_id") or "",
+        video_job_id_b=payload.get("video_job_id_b") or "",
         result_path="",
         model_version=None,
         event_count=event_count,
@@ -109,6 +114,8 @@ async def publish_model_result(
             lab_record_id=record.record_id,
             video_path=record.video_path,
             video_path_b=record.video_path_b,
+            video_job_id=record.video_job_id,
+            video_job_id_b=record.video_job_id_b,
             is_lab=True,
         )
     else:
@@ -121,6 +128,7 @@ async def publish_model_result(
             lab_record_id=record.record_id,
             video_path=record.video_path,
             video_path_b=record.video_path_b,
+            video_job_id=record.video_job_id,
             create_work_orders=False,
             is_lab=True,
         )
@@ -321,3 +329,64 @@ async def clear_lab_sandbox(
     await db.execute(delete(DmAnonymousPerson).where(DmAnonymousPerson.is_lab == 1))
     await db.commit()
     return ok({"cleared": True})
+
+
+@router.get("/verify-video/{job_id}")
+async def verify_model_video(
+    job_id: str,
+    account: SysAccount = Depends(get_current_account),
+):
+    """校验模型服务上指定 job 的视频资源是否仍然可用。"""
+    settings = get_settings()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"{settings.anomaly_tracker_url}/api/jobs/{job_id}")
+    except httpx.RequestError:
+        return ok(
+            {
+                "exists": False,
+                "reason": "model_offline",
+                "message": "模型推理服务离线，暂时无法查看视频",
+                "video_url": None,
+            }
+        )
+
+    if resp.status_code == 404:
+        return ok(
+            {
+                "exists": False,
+                "reason": "job_not_found",
+                "message": "视频资源已过期清理，无法回放查看",
+                "video_url": None,
+            }
+        )
+    if resp.status_code != 200:
+        return ok(
+            {
+                "exists": False,
+                "reason": "model_error",
+                "message": "视频资源校验失败，请稍后重试",
+                "video_url": None,
+            }
+        )
+
+    data = resp.json()
+    video_url = data.get("video_url")
+    if data.get("status") != "completed" or not video_url:
+        return ok(
+            {
+                "exists": False,
+                "reason": "video_unavailable",
+                "message": "视频资源已过期清理，无法回放查看",
+                "video_url": None,
+            }
+        )
+
+    return ok(
+        {
+            "exists": True,
+            "reason": "ok",
+            "message": "视频资源可用",
+            "video_url": f"/model/api/jobs/{job_id}/video",
+        }
+    )

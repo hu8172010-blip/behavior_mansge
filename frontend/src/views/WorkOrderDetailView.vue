@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, type WorkOrderDetail } from "../api";
+import { formatBehaviorDesc, isEvidenceJson } from "../utils/behaviorDisplay";
 import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
@@ -78,7 +79,11 @@ onMounted(loadDetail);
           <div class="panel-title"><div><h3>工单信息</h3><p>{{ detail.work_order_no }}</p></div></div>
           <p><b>工单状态：</b><span :class="detail.work_order_status_id === 4 ? 'success' : 'warn'">{{ detail.status_name }}</span></p>
           <p><b>事件类型：</b>{{ detail.type_name }}　<b>严重级别：</b><span :class="detail.level_name === '高' ? 'danger' : detail.level_name === '中' ? 'warn' : ''">{{ detail.level_name }}</span></p>
-          <p><b>事件描述：</b>{{ detail.description || "—" }}</p>
+          <p><b>事件描述：</b>{{ formatBehaviorDesc(detail.description, detail.type_name) || "—" }}</p>
+          <details v-if="isEvidenceJson(detail.description)" style="margin-top: 4px">
+            <summary style="cursor: pointer; font-size: 12px; color: var(--text-secondary)">查看原始证据 JSON</summary>
+            <pre style="max-height: 240px; overflow: auto; background: #f6f8fa; padding: 10px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; word-break: break-all">{{ JSON.stringify(JSON.parse(detail.description || "{}"), null, 2) }}</pre>
+          </details>
           <p><b>检出时间：</b>{{ detail.detected_at }}　<b>置信度：</b>{{ detail.confidence_score ?? "—" }}</p>
           <p><b>位置 / 设备：</b>{{ detail.region_name || "—" }}（{{ detail.camera_name || "—" }} {{ detail.camera_code || "" }}）</p>
           <p><b>人员特征：</b>{{ detail.person_desc || "—" }}</p>

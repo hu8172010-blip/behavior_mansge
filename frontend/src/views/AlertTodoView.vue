@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { api, type AlertItem, type MetaEnums, type WorkOrderItem } from "../api";
 import { useAuthStore } from "../stores/auth";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
+import { formatBehaviorDesc } from "../utils/behaviorDisplay";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -196,7 +197,7 @@ onMounted(async () => {
         <div v-else-if="!alerts.length" class="table-row"><span>暂无符合条件的预警</span></div>
         <div v-for="item in alerts" :key="item.alert_id" class="table-row">
           <span>{{ item.alert_time }}</span>
-          <span><b>{{ item.type_name }}</b><em v-if="item.is_marked_focus" class="orange">　◆重点关注</em><span v-if="item.is_lab === 1" class="tag tag-lab">模拟</span><br /><small>{{ item.description }}</small></span>
+          <span><b>{{ item.type_name }}</b><em v-if="item.is_marked_focus" class="orange">　◆重点关注</em><span v-if="item.is_lab === 1" class="tag tag-lab">模拟</span><br /><small>{{ formatBehaviorDesc(item.description, item.type_name) || "—" }}</small></span>
           <span :class="levelClass(item.level_name)">● {{ item.level_name }}</span>
           <span>{{ item.region_name || "—" }}<br /><small>{{ item.device_name }}</small></span>
           <span>{{ item.status_name }}<br /><small v-if="item.track_id"><button class="link" @click="detailChainId = item.track_id">查看轨迹</button></small></span>
@@ -230,7 +231,7 @@ onMounted(async () => {
         <div v-else-if="!orders.length" class="table-row"><span>暂无工单</span></div>
         <div v-for="item in orders" :key="item.work_order_id" class="table-row">
           <span><b>{{ item.work_order_no }}</b><span v-if="item.is_lab === 1" class="tag tag-lab">模拟</span></span>
-          <span>{{ item.type_name }}<br /><small>{{ item.description }}</small></span>
+          <span>{{ item.type_name }}<br /><small>{{ formatBehaviorDesc(item.description, item.type_name) || "—" }}</small></span>
           <span :class="levelClass(item.level_name)">● {{ item.level_name }}</span>
           <span>{{ item.assignee_name }}</span>
           <span>{{ item.assigned_at }}</span>

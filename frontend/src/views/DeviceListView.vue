@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api, type DeviceItem, type FaultItem } from "../api";
+import { formatBehaviorDesc } from "../utils/behaviorDisplay";
 import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
@@ -323,7 +324,7 @@ onMounted(() => {
               <td>{{ b.type_name }}</td>
               <td>{{ b.level_name }}</td>
               <td>{{ b.status_name }}</td>
-              <td><small>{{ b.description }}</small></td>
+              <td><small>{{ formatBehaviorDesc(b.description, b.type_name) || "—" }}</small></td>
             </tr>
           </tbody>
         </table>

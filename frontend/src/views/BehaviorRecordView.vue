@@ -4,6 +4,8 @@ import { useRoute } from "vue-router";
 import { api, type BehaviorItem, type MetaEnums } from "../api";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 import PersonDetailModal from "../components/PersonDetailModal.vue";
+import BehaviorEvidenceModal from "../components/BehaviorEvidenceModal.vue";
+import { formatBehaviorDesc, isEvidenceJson } from "../utils/behaviorDisplay";
 
 const route = useRoute();
 
@@ -27,6 +29,7 @@ const jumpPage = ref<number | null>(null);
 
 const detailChainId = ref<number | null>(null);
 const detailPersonId = ref<number | null>(null);
+const evidenceText = ref<string | null>(null);
 
 async function loadData() {
   loading.value = true;
@@ -159,7 +162,9 @@ onMounted(async () => {
           <span>{{ item.detected_at }}</span>
           <span><b>{{ item.type_name }}</b><span v-if="item.is_lab === 1" class="tag tag-lab">模拟</span></span>
           <span :class="levelClass(item.level_name)">● {{ item.level_name }}</span>
-          <span>{{ item.description || "—" }}<br /><small v-if="item.confidence_score">置信度 {{ item.confidence_score }}</small></span>
+          <span>{{ formatBehaviorDesc(item.description, item.type_name) || "—" }}
+            <button v-if="isEvidenceJson(item.description)" class="link" @click="evidenceText = item.description">详情</button>
+            <br /><small v-if="item.confidence_score">置信度 {{ item.confidence_score }}</small></span>
           <span>{{ item.region_name || "—" }}<br /><small>{{ item.device_name }}</small></span>
           <span>{{ item.status_name }}<br />
             <small v-if="item.track_id">
@@ -185,6 +190,7 @@ onMounted(async () => {
 
     <TrackDetailModal v-if="detailChainId" :chain-id="detailChainId" @close="detailChainId = null" />
     <PersonDetailModal v-if="detailPersonId" :visible="!!detailPersonId" :person-id="detailPersonId" @update:visible="detailPersonId = null" />
+    <BehaviorEvidenceModal v-if="evidenceText" :raw="evidenceText" @close="evidenceText = null" />
   </div>
 </template>
 

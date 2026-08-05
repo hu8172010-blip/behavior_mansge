@@ -85,5 +85,9 @@ DROP PROCEDURE `do_migration_20260805`;
 -- ------------------------------------------------------------
 -- 5. 存量数据归档开关初始化
 -- ------------------------------------------------------------
+SET SQL_SAFE_UPDATES = 0;
+
 UPDATE `fa_abnormal_behavior` SET `is_archived` = 1 WHERE `is_lab` = 0;
 UPDATE `track_pass_chain` SET `is_archived` = 1 WHERE `is_lab` = 0;
+
+SET SQL_SAFE_UPDATES = 1;

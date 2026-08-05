@@ -44,6 +44,8 @@ const modelOffline = computed(() => modelOnline.value === false);
 
 /* ---------------- 设备 ---------------- */
 const selectedDevice = ref<number | undefined>(undefined);
+const selectedReidDeviceA = ref<number | undefined>(undefined);
+const selectedReidDeviceB = ref<number | undefined>(undefined);
 const devices = ref<{ id: number; name: string }[]>([]);
 
 /* ---------------- 页签 ---------------- */
@@ -203,14 +205,20 @@ function exportResult() {
 
 async function publishRecord() {
   if (!result.value || !canPublish.value) return;
+  if (selectedDevice.value == null) {
+    message.value = "请选择模拟摄像头";
+    messageType.value = "error";
+    return;
+  }
   analyzing.value = true;
   message.value = "正在发布到业务库...";
   messageType.value = "info";
   try {
     const data = await api.labPublishResult({
-      device_id: selectedDevice.value,
+      device_ids: [selectedDevice.value],
       record_name: `模拟-${videoFile.value?.name || "识别结果"}`,
       video_filename: videoFile.value?.name || "",
+      video_url: videoUrl.value || modelJobVideoUrl(singleJobId.value) || "",
       result: result.value,
     });
     isPublished.value = true;
@@ -290,7 +298,14 @@ const reidMessageType = ref<"info" | "success" | "error">("info");
 const reidWorking = computed(() => reidPhase.value === "working" || reidPhase.value === "resolving");
 const reidUnavailable = computed(() => reidResult.value?.reid_status === "unavailable");
 const reidCanStart = computed(
-  () => !!reidFileA.value && !!reidFileB.value && !reidWorking.value && !modelOffline.value
+  () =>
+    !!reidFileA.value &&
+    !!reidFileB.value &&
+    selectedReidDeviceA.value != null &&
+    selectedReidDeviceB.value != null &&
+    selectedReidDeviceA.value !== selectedReidDeviceB.value &&
+    !reidWorking.value &&
+    !modelOffline.value
 );
 const reidCanClean = computed(
   () => !!reidCollectionId.value && (reidPhase.value === "done" || reidPhase.value === "failed")
@@ -312,6 +327,16 @@ function onReidFileChange(which: "A" | "B", e: Event) {
 
 async function startReid() {
   if (!reidFileA.value || !reidFileB.value || reidWorking.value) return;
+  if (selectedReidDeviceA.value == null || selectedReidDeviceB.value == null) {
+    reidMessage.value = "请分别为两段视频选择对应的摄像头";
+    reidMessageType.value = "error";
+    return;
+  }
+  if (selectedReidDeviceA.value === selectedReidDeviceB.value) {
+    reidMessage.value = "双视频场景需要选择两个不同的摄像头";
+    reidMessageType.value = "error";
+    return;
+  }
   if (modelOffline.value) {
     alert(MODEL_OFFLINE_MSG);
     return;
@@ -697,6 +722,20 @@ onBeforeUnmount(() => {
             <span v-if="reidFileB" class="file-name">{{ reidFileB.name }}（{{ (reidFileB.size / 1024 / 1024).toFixed(1) }} MB）</span>
             <span v-else class="placeholder">支持 MP4/AVI/MOV/MKV/WEBM，最大 2GB</span>
           </div>
+        </div>
+        <div class="form-row">
+          <label>摄像头 A</label>
+          <select v-model="selectedReidDeviceA">
+            <option :value="undefined">请选择摄像头 A</option>
+            <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>摄像头 B</label>
+          <select v-model="selectedReidDeviceB">
+            <option :value="undefined">请选择摄像头 B</option>
+            <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.name }}</option>
+          </select>
         </div>
         <div class="toolbar" style="margin-top: 12px">
           <button class="primary" :disabled="!reidCanStart" @click="startReid">

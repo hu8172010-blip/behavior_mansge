@@ -48,6 +48,16 @@ export interface PageData<T> {
 export interface AlertItem {
   alert_id: number;
   behavior_id: number;
+  lab_record_id: number | null;
+  camera_a_id: number | null;
+  camera_b_id: number | null;
+  is_dual_video: number;
+  video_path: string | null;
+  video_path_b: string | null;
+  false_positive: number | null;
+  person_identity: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
   alert_time: string;
   alert_status_id: number;
   status_name: string;
@@ -435,6 +445,8 @@ export const api = {
     http.get<PageData<AlertItem>>("/alerts", { ...params, ...getLabIncludeParam() }),
   confirmAlert: (alertId: number) => http.post(`/alerts/${alertId}/confirm`),
   ignoreAlert: (alertId: number, note?: string) => http.post(`/alerts/${alertId}/ignore`, { note }),
+  reviewAlert: (alertId: number, body: { false_positive: boolean; person_identity: string; note?: string }) =>
+    http.post(`/alerts/${alertId}/review`, body),
   workOrders: (params: { status_id?: number; page: number; size: number }) =>
     http.get<PageData<WorkOrderItem>>("/workorders", { ...params, ...getLabIncludeParam() }),
   workOrderDetail: (id: number) => http.get<WorkOrderDetail>(`/workorders/${id}`),
@@ -514,8 +526,15 @@ export const api = {
     http.download("/tracks/export", params, "track_chains.csv"),
   exportAlerts: (params: { status_id?: number; severity_id?: number; keyword?: string }) =>
     http.download("/alerts/export", params, "behavior_alerts.csv"),
-  labPublishResult: (body: { device_id?: number; record_name?: string; video_filename?: string; result: any }) =>
-    http.post<LabPublishResponse>("/lab/publish", body),
+  labPublishResult: (body: {
+    device_ids: number[];
+    record_name?: string;
+    video_filename?: string;
+    video_filename_b?: string;
+    video_url?: string;
+    video_url_b?: string;
+    result: any;
+  }) => http.post<LabPublishResponse>("/lab/publish", body),
   labClearSandbox: () => http.post<{ cleared: boolean }>("/lab/clear-sandbox"),
   labRecords: (params: { page: number; size: number }) => http.get<PageData<LabRecordItem>>("/lab/records", params),
   labRecordDetail: (id: number) => http.get<LabRecordDetail>(`/lab/records/${id}`),

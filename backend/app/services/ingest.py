@@ -73,6 +73,10 @@ async def ingest_anomaly_result(
     result: dict[str, Any],
     device_id: int | None,
     account_id: int | None,
+    device_ids: list[int] | None = None,
+    lab_record_id: int | None = None,
+    video_path: str | None = None,
+    video_path_b: str | None = None,
     create_work_orders: bool = True,
     video_start: datetime | None = None,
     is_lab: bool = False,
@@ -83,7 +87,22 @@ async def ingest_anomaly_result(
     if not video_start:
         video_start = datetime.now()
 
-    resolved_device_id = await _resolve_device_id(db, device_id)
+    if device_ids:
+        valid = []
+        for did in device_ids:
+            if not did:
+                continue
+            exists = (await db.execute(select(Device.id).where(Device.id == did))).scalar_one_or_none()
+            if exists:
+                valid.append(did)
+        resolved_device_ids = valid if valid else [await _resolve_device_id(db, device_id)]
+    else:
+        resolved_device_ids = [await _resolve_device_id(db, device_id)]
+
+    is_dual = len(resolved_device_ids) > 1
+    camera_a = resolved_device_ids[0]
+    camera_b = resolved_device_ids[1] if is_dual else None
+    device_route = "-".join(str(d) for d in resolved_device_ids)
 
     track_to_person: dict[int, int] = {}
     track_to_chain: dict[int, int] = {}
@@ -110,14 +129,16 @@ async def ingest_anomaly_result(
             chain_unique_id=f"{track_id}_{uuid.uuid4().hex[:8]}",
             person_id=person.person_id,
             confidence=Decimal("0.8"),
-            device_route=str(resolved_device_id),
-            first_device_id=resolved_device_id,
-            last_device_id=resolved_device_id,
+            device_route=device_route,
+            first_device_id=camera_a,
+            last_device_id=camera_b if camera_b else camera_a,
             chain_start_time=video_start + timedelta(seconds=first_seen),
             chain_end_time=video_start + timedelta(seconds=last_seen),
             total_duration_sec=int(last_seen - first_seen),
             chain_status=1,
             is_lab=is_lab_value,
+            lab_record_id=lab_record_id,
+            is_archived=0 if is_lab_value else 1,
         )
         db.add(chain)
         await db.flush()
@@ -127,6 +148,8 @@ async def ingest_anomaly_result(
     alerts: list[FaBehaviorAlert] = []
     work_orders: list[FaWorkOrder] = []
 
+    is_first_alert = True
+    model_result_json = json.dumps(result, ensure_ascii=False, default=str) if is_lab_value else None
     for event in events:
         event_type = str(event.get("event_type", ""))
         cn_name, default_sev = EVENT_TYPE_MAP.get(event_type, (event_type, 2))
@@ -149,9 +172,13 @@ async def ingest_anomaly_result(
             severity_level_id=behavior_type.default_severity_level_id or default_sev,
             alert_status_id=1,
             detected_at=detected_at,
-            camera_id=resolved_device_id,
+            camera_id=camera_a,
+            camera_b_id=camera_b,
+            lab_record_id=lab_record_id,
             confidence_score=Decimal(str(round(confidence, 4))) if confidence is not None else None,
             is_lab=is_lab_value,
+            is_archived=0 if is_lab_value else 1,
+            model_evidence=json.dumps(event, ensure_ascii=False, default=str)[:2000],
             description=json.dumps(
                 {
                     "event_type": event_type,
@@ -169,12 +196,20 @@ async def ingest_anomaly_result(
 
         alert = FaBehaviorAlert(
             behavior_id=behavior.behavior_id,
+            lab_record_id=lab_record_id,
+            camera_a_id=camera_a,
+            camera_b_id=camera_b,
+            is_dual_video=1 if is_dual else 0,
+            video_path=video_path,
+            video_path_b=video_path_b,
+            model_result_json=model_result_json if is_first_alert else None,
             severity_level_id=behavior.severity_level_id,
             alert_status_id=1,
             alert_time=detected_at,
             is_marked_focus=0,
             is_lab=is_lab_value,
         )
+        is_first_alert = False
         db.add(alert)
         await db.flush()
         alerts.append(alert)

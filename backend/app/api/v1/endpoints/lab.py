@@ -42,21 +42,36 @@ async def publish_model_result(
     if not isinstance(result, dict):
         raise HTTPException(status_code=422, detail="缺少 result 字段")
 
-    device_id = payload.get("device_id") or None
-    if device_id:
-        exists = (await db.execute(select(Device.id).where(Device.id == device_id, Device.is_deleted == 0))).scalar_one_or_none()
+    raw_device_ids = payload.get("device_ids")
+    if not isinstance(raw_device_ids, list) or not raw_device_ids:
+        raise HTTPException(status_code=400, detail="请至少选择一个摄像头")
+    if len(raw_device_ids) > 2:
+        raise HTTPException(status_code=400, detail="最多支持两个摄像头")
+    if len(raw_device_ids) == 2 and raw_device_ids[0] == raw_device_ids[1]:
+        raise HTTPException(status_code=400, detail="双视频场景需要选择两个不同的摄像头")
+
+    for did in raw_device_ids:
+        exists = (await db.execute(select(Device.id).where(Device.id == did, Device.is_deleted == 0))).scalar_one_or_none()
         if not exists:
-            raise HTTPException(status_code=400, detail="设备不存在")
+            raise HTTPException(status_code=400, detail=f"摄像头 {did} 不存在")
 
     record_name = payload.get("record_name") or "模拟识别结果"
     video_filename = payload.get("video_filename") or ""
+    video_filename_b = payload.get("video_filename_b") or ""
+    is_dual = len(raw_device_ids) == 2
+    camera_a = int(raw_device_ids[0])
+    camera_b = int(raw_device_ids[1]) if is_dual else None
 
     record = LabRecord(
         record_name=record_name,
         account_id=account.account_id,
-        device_id=device_id,
+        device_id=camera_a,
+        camera_a_id=camera_a,
+        camera_b_id=camera_b,
         video_filename=video_filename,
-        video_path="",
+        is_dual_video=1 if is_dual else 0,
+        video_path=payload.get("video_url") or "",
+        video_path_b=payload.get("video_url_b") or "",
         result_path="",
         model_version=None,
         event_count=len(result.get("events") or []),
@@ -79,9 +94,13 @@ async def publish_model_result(
     counts = await ingest_anomaly_result(
         db,
         result,
-        device_id=device_id,
+        device_id=camera_a,
         account_id=account.account_id,
-        create_work_orders=True,
+        device_ids=[int(d) for d in raw_device_ids],
+        lab_record_id=record.record_id,
+        video_path=record.video_path,
+        video_path_b=record.video_path_b,
+        create_work_orders=False,
         is_lab=True,
     )
     record.is_published = 1
@@ -191,12 +210,19 @@ async def publish_lab_record(
     content = Path(record.result_path).read_text(encoding="utf-8")
     result = json.loads(content)
 
+    device_ids = [record.camera_a_id]
+    if record.camera_b_id:
+        device_ids.append(record.camera_b_id)
     counts = await ingest_anomaly_result(
         db,
         result,
-        device_id=record.device_id,
+        device_id=record.camera_a_id,
         account_id=account.account_id,
-        create_work_orders=True,
+        device_ids=device_ids,
+        lab_record_id=record.record_id,
+        video_path=record.video_path,
+        video_path_b=record.video_path_b,
+        create_work_orders=False,
         is_lab=True,
     )
 

@@ -299,8 +299,23 @@ INSERT INTO `fa_operation_log` (`log_id`, `module_code`, `operation_type`, `oper
 (7039, 'TRACK',            'QUERY',  6, 'EMPLOYEE',      NULL, NULL, '{"scope":"self_only"}', '192.168.1.70', NOW() - INTERVAL 2 DAY),
 (7040, 'ABNORMAL_BEHAVIOR', 'EXPORT', 2, 'SECURITY_LEAD', NULL, NULL, '{"status":5,"time_range":"week","format":"xlsx"}', '192.168.1.36', NOW() - INTERVAL 1 DAY);
 
+-- ------------------------------------------------------------
+-- 12. 统一将本脚本预置的演示业务数据标记为模拟数据（is_lab = 1）
+--     说明：角标与业务列表默认按 is_lab = 0 过滤（前端【过滤模拟数据】开关默认开启），
+--     标记后新环境告警待办角标只统计真实未处理告警，不再显示预置的 12 条测试预警；
+--     如需查看演示数据，关闭顶部【过滤模拟数据】开关即可（手动调试开关）。
+--     前置要求：业务表已含 is_lab 字段（SQLAlchemy create_all 建表自带，
+--     或已执行 backend/scripts/init_is_lab.sql）。
+-- ------------------------------------------------------------
+UPDATE `dm_anonymous_person` SET `is_lab` = 1 WHERE `person_id` BETWEEN 2001 AND 2012;
+UPDATE `track_pass_chain`    SET `is_lab` = 1 WHERE `id` BETWEEN 3001 AND 3020;
+UPDATE `fa_abnormal_behavior` SET `is_lab` = 1 WHERE `behavior_id` BETWEEN 4001 AND 4024;
+UPDATE `fa_behavior_alert`   SET `is_lab` = 1 WHERE `alert_id` BETWEEN 5001 AND 5024;
+UPDATE `fa_work_order`       SET `is_lab` = 1 WHERE `work_order_id` BETWEEN 6001 AND 6006;
+
 -- ============================================================
 -- Mock 数据灌入完成
 -- 数据规模：账号9 / 设备26 / 故障6 / 人员12 / 轨迹20链51明细
 --           行为24 / 预警24(待确认12) / 工单6 / 日志40
+-- 注意：以上演示业务数据已统一标记 is_lab = 1，默认被【过滤模拟数据】开关排除
 -- ============================================================

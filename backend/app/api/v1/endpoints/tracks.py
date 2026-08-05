@@ -48,6 +48,8 @@ async def list_tracks(
     count_stmt = select(func.count()).select_from(TrackPassChain).outerjoin(
         DmAnonymousPerson, DmAnonymousPerson.person_id == TrackPassChain.person_id
     )
+    stmt = stmt.where(TrackPassChain.is_archived == 1)
+    count_stmt = count_stmt.where(TrackPassChain.is_archived == 1)
     if not include_lab:
         stmt = stmt.where(TrackPassChain.is_lab == 0)
         count_stmt = count_stmt.where(TrackPassChain.is_lab == 0)
@@ -172,6 +174,7 @@ async def export_tracks(
         .outerjoin(DmAnonymousPerson, DmAnonymousPerson.person_id == TrackPassChain.person_id)
         .outerjoin(first_dev, first_dev.c.id == TrackPassChain.first_device_id)
         .outerjoin(last_dev, last_dev.c.id == TrackPassChain.last_device_id)
+        .where(TrackPassChain.is_archived == 1)
     )
     if not include_lab:
         stmt = stmt.where(TrackPassChain.is_lab == 0)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
 
 import uvicorn
 
@@ -20,6 +21,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # Windows 下使用 multiprocessing/spawn 时，防止子进程重复执行入口点
+    multiprocessing.freeze_support()
     args = build_parser().parse_args()
     uvicorn.run(
         "anomaly_tracker.api:app",

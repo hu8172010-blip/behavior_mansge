@@ -124,6 +124,52 @@ async function submitIgnore() {
   }
 }
 
+const showReview = ref(false);
+const currentReview = ref<AlertItem | null>(null);
+const reviewFalsePositive = ref(false);
+const reviewPersonIdentity = ref<"registered" | "stranger">("stranger");
+const reviewNote = ref("");
+
+function openReview(item: AlertItem) {
+  currentReview.value = item;
+  reviewFalsePositive.value = false;
+  reviewPersonIdentity.value = "stranger";
+  reviewNote.value = "";
+  showReview.value = true;
+}
+
+function openVideo(item: AlertItem) {
+  const urls = [item.video_path, item.video_path_b].filter(Boolean);
+  if (!urls.length) {
+    alert("未关联原始视频");
+    return;
+  }
+  for (const u of urls) {
+    if (u) window.open(u, "_blank");
+  }
+}
+
+async function submitReview() {
+  if (!currentReview.value) return;
+  submitting.value = true;
+  try {
+    await api.reviewAlert(currentReview.value.alert_id, {
+      false_positive: reviewFalsePositive.value,
+      person_identity: reviewPersonIdentity.value,
+      note: reviewNote.value || undefined,
+    });
+    showReview.value = false;
+    currentReview.value.alert_status_id = 6;
+    currentReview.value.status_name = "已复核归档";
+    notice.value = `告警 #${currentReview.value.alert_id} 已复核归档`;
+    await auth.refreshPendingCount();
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    submitting.value = false;
+  }
+}
+
 function openAssign(item: AlertItem) {
   currentAlert.value = item;
   assignTo.value = enums.value?.handlers[0]?.account_id ?? 0;
@@ -202,8 +248,8 @@ onMounted(async () => {
           <span>{{ item.region_name || "—" }}<br /><small>{{ item.device_name }}</small></span>
           <span>{{ item.status_name }}<br /><small v-if="item.track_id"><button class="link" @click="detailChainId = item.track_id">查看轨迹</button></small></span>
           <span class="row-actions">
-            <button v-if="item.alert_status_id === 1 && auth.hasPermission('alarm:confirm')" class="btn-sm btn-confirm" :disabled="submitting" @click="confirmAlert(item)">确认</button>
-            <button v-if="item.alert_status_id === 1 && auth.hasPermission('alarm:confirm')" class="btn-sm btn-ignore" :disabled="submitting" @click="openIgnore(item)">误报忽略</button>
+            <button v-if="item.alert_status_id === 1" class="btn-sm" :disabled="submitting" @click="openVideo(item)">查看视频</button>
+            <button v-if="item.alert_status_id === 1" class="btn-sm btn-confirm" :disabled="submitting" @click="openReview(item)">人工复核</button>
             <button v-if="item.alert_status_id === 2 && auth.hasPermission('alarm:assign')" class="btn-sm btn-assign" :disabled="submitting" @click="openAssign(item)">派单</button>
             <span v-if="item.alert_status_id >= 3 && item.alert_status_id <= 5">—</span>
           </span>
@@ -268,6 +314,37 @@ onMounted(async () => {
           <option v-for="handler in enums?.handlers || []" :key="handler.account_id" :value="handler.account_id">{{ handler.real_name }}</option>
         </select>
         <button class="primary" :disabled="submitting || !assignTo" @click="submitAssign">确认派单</button>
+      </div>
+    </div>
+
+    <div v-if="showReview" class="modal-mask" @click.self="showReview = false">
+      <div class="modal">
+        <button class="close" @click="showReview = false">×</button>
+        <h2>人工复核</h2>
+        <p><b>事件：</b>{{ currentReview?.type_name }}　<b>级别：</b>{{ currentReview?.level_name }}　<b>位置：</b>{{ currentReview?.region_name }}</p>
+        <p><small>{{ formatBehaviorDesc(currentReview?.description, currentReview?.type_name || '') || '—' }}</small></p>
+        <div class="form-row" style="display: block; margin-top: 12px">
+          <label>是否误报</label>
+          <select v-model="reviewFalsePositive" style="width: 100%; margin-top: 6px">
+            <option :value="false">否</option>
+            <option :value="true">是</option>
+          </select>
+        </div>
+        <div class="form-row" style="display: block; margin-top: 12px">
+          <label>人员身份</label>
+          <select v-model="reviewPersonIdentity" style="width: 100%; margin-top: 6px">
+            <option value="registered">数据库登记人员</option>
+            <option value="stranger">陌生人</option>
+          </select>
+        </div>
+        <div class="form-row" style="display: block; margin-top: 12px">
+          <label>复核备注（可选）</label>
+          <input v-model="reviewNote" placeholder="例如：已确认，非误报" style="width: 100%; margin-top: 6px" />
+        </div>
+        <div class="toolbar" style="margin-top: 16px">
+          <button class="primary" :disabled="submitting" @click="submitReview">确认归档</button>
+          <button :disabled="submitting" @click="openVideo(currentReview!)">查看视频</button>
+        </div>
       </div>
     </div>
 

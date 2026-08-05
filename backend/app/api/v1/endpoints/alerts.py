@@ -18,6 +18,7 @@ from app.models import (
     FaAbnormalBehavior,
     FaBehaviorAlert,
     SysAccount,
+    TrackPassChain,
 )
 from app.schemas.common import ok, page_result
 from app.services.log_service import write_log
@@ -30,6 +31,16 @@ def alert_select():
         select(
             FaBehaviorAlert.alert_id,
             FaBehaviorAlert.behavior_id,
+            FaBehaviorAlert.lab_record_id,
+            FaBehaviorAlert.camera_a_id,
+            FaBehaviorAlert.camera_b_id,
+            FaBehaviorAlert.is_dual_video,
+            FaBehaviorAlert.video_path,
+            FaBehaviorAlert.video_path_b,
+            FaBehaviorAlert.false_positive,
+            FaBehaviorAlert.person_identity,
+            FaBehaviorAlert.reviewed_by,
+            FaBehaviorAlert.reviewed_at,
             FaBehaviorAlert.alert_time,
             FaBehaviorAlert.alert_status_id,
             FaBehaviorAlert.is_marked_focus,
@@ -56,6 +67,16 @@ def row_to_dict(row) -> dict:
     return {
         "alert_id": row.alert_id,
         "behavior_id": row.behavior_id,
+        "lab_record_id": row.lab_record_id,
+        "camera_a_id": row.camera_a_id,
+        "camera_b_id": row.camera_b_id,
+        "is_dual_video": row.is_dual_video,
+        "video_path": row.video_path,
+        "video_path_b": row.video_path_b,
+        "false_positive": row.false_positive,
+        "person_identity": row.person_identity,
+        "reviewed_by": row.reviewed_by,
+        "reviewed_at": row.reviewed_at.strftime("%Y-%m-%d %H:%M:%S") if row.reviewed_at else None,
         "alert_time": row.alert_time.strftime("%Y-%m-%d %H:%M:%S"),
         "alert_status_id": row.alert_status_id,
         "status_name": row.status_name,
@@ -152,6 +173,12 @@ class IgnoreBody(BaseModel):
     note: str | None = None
 
 
+class ReviewBody(BaseModel):
+    false_positive: bool = False
+    person_identity: str = "stranger"
+    note: str | None = None
+
+
 @router.post("/{alert_id}/ignore")
 async def ignore_alert(alert_id: int, body: IgnoreBody, db: AsyncSession = Depends(get_db), account: SysAccount = Depends(get_current_account)):
     alert = await load_alert(db, alert_id)
@@ -170,6 +197,63 @@ async def ignore_alert(alert_id: int, body: IgnoreBody, db: AsyncSession = Depen
     await write_log(db, "ABNORMAL_BEHAVIOR", "UPDATE", account, alert.behavior_id, "BEHAVIOR", {"action": "ignore", "alert_id": alert_id, "note": body.note})
     await db.commit()
     return ok(message="告警已忽略（误报）")
+
+
+@router.post("/{alert_id}/review")
+async def review_alert(
+    alert_id: int,
+    body: ReviewBody,
+    db: AsyncSession = Depends(get_db),
+    account: SysAccount = Depends(get_current_account),
+):
+    alert = await load_alert(db, alert_id)
+    if alert.alert_status_id != 1:
+        raise HTTPException(status_code=400, detail="仅待确认状态的预警可以复核")
+    behavior = (
+        await db.execute(select(FaAbnormalBehavior).where(FaAbnormalBehavior.behavior_id == alert.behavior_id))
+    ).scalar_one()
+
+    now = datetime.now()
+    alert.alert_status_id = 6
+    alert.confirmed_at = now
+    alert.confirmed_by = account.account_id
+    alert.resolved_at = now
+    alert.reviewed_by = account.account_id
+    alert.reviewed_at = now
+    alert.false_positive = 1 if body.false_positive else 0
+    alert.person_identity = body.person_identity
+
+    behavior.alert_status_id = 6
+    behavior.is_archived = 1
+    behavior.false_positive = 1 if body.false_positive else 0
+    behavior.person_identity = body.person_identity
+    behavior.reviewed_by = account.account_id
+    behavior.reviewed_at = now
+    if body.note:
+        behavior.description = f"{behavior.description or ''}\n复核备注：{body.note}".strip()[:500]
+
+    if behavior.track_id:
+        chain = await db.execute(select(TrackPassChain).where(TrackPassChain.id == behavior.track_id))
+        chain = chain.scalar_one_or_none()
+        if chain:
+            chain.is_archived = 1
+
+    await write_log(
+        db,
+        "BEHAVIOR_REVIEW",
+        "CREATE",
+        account,
+        alert.behavior_id,
+        "BEHAVIOR",
+        {
+            "alert_id": alert_id,
+            "false_positive": body.false_positive,
+            "person_identity": body.person_identity,
+            "note": body.note,
+        },
+    )
+    await db.commit()
+    return ok(message="复核完成并已归档")
 
 
 @router.get("/export")

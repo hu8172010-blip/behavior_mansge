@@ -63,7 +63,9 @@ async def list_behaviors(
     count_stmt = select(func.count()).select_from(FaAbnormalBehavior).join(
         DmBehaviorType, DmBehaviorType.behavior_type_id == FaAbnormalBehavior.behavior_type_id
     ).outerjoin(Device, Device.id == FaAbnormalBehavior.camera_id)
-    filters = [FaAbnormalBehavior.is_lab == 0] if not include_lab else []
+    filters = [FaAbnormalBehavior.is_archived == 1]
+    if not include_lab:
+        filters.append(FaAbnormalBehavior.is_lab == 0)
     if type_id is not None:
         filters.append(FaAbnormalBehavior.behavior_type_id == type_id)
     if severity_id is not None:
@@ -144,7 +146,9 @@ async def export_behaviors(
         .join(DmAlertStatus, DmAlertStatus.alert_status_id == FaAbnormalBehavior.alert_status_id)
         .outerjoin(Device, Device.id == FaAbnormalBehavior.camera_id)
     )
-    filters = [FaAbnormalBehavior.is_lab == 0] if not include_lab else []
+    filters = [FaAbnormalBehavior.is_archived == 1]
+    if not include_lab:
+        filters.append(FaAbnormalBehavior.is_lab == 0)
     if type_id is not None:
         filters.append(FaAbnormalBehavior.behavior_type_id == type_id)
     if severity_id is not None:

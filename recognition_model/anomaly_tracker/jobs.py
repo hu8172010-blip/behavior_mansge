@@ -25,9 +25,11 @@ class JobRecord:
     model_status: dict[str, object] | None = None
 
     def public_dict(self) -> dict[str, object]:
+        # 内部使用 "running"，对外统一暴露为 "processing"，与前端状态约定一致
+        public_status = "processing" if self.status == "running" else self.status
         return {
             "job_id": self.job_id,
-            "status": self.status,
+            "status": public_status,
             "progress": round(self.progress, 4),
             "original_name": self.original_name,
             "error": deepcopy(self.error),

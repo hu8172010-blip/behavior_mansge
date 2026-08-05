@@ -67,8 +67,8 @@ onMounted(async () => {
   }
 });
 
-onUnmounted(() => {et();
-  if (pendingCountTimer) window.clarInervalpendingCountTimer
+onUnmounted(() => {
+  if (pendingCountTimer) window.clearInterval(pendingCountTimer);
   disconnectPermissionSocket();
 });
 

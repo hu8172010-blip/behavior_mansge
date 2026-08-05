@@ -46,6 +46,10 @@ PUBLIC_TIMEOUT_ERROR = {
     "code": "processing_timeout",
     "message": "视频处理超过时间限制",
 }
+PUBLIC_PROGRESS_TIMEOUT_ERROR = {
+    "code": "progress_timeout",
+    "message": "推理过程长时间没有进展，任务被判定为卡死",
+}
 ProcessorFactory = Callable[[], VideoProcessor]
 
 
@@ -167,6 +171,7 @@ def create_app(
     output_reservation_bytes: int = 512 * 1024 * 1024,
     run_ttl_seconds: float = 24 * 60 * 60,
     processing_timeout_seconds: float = 30 * 60,
+    progress_timeout_seconds: float = 10 * 60,
     managed_artifact_limit_bytes: int = MAX_DATA_BYTES,
     managed_ledger_path: str | Path | None = None,
 ) -> FastAPI:
@@ -302,6 +307,15 @@ def create_app(
                 detail="视频容器签名无效",
             )
 
+        LOGGER.info(
+            "Job %s created: name=%s size=%d bytes suffix=%s calibration=%s",
+            record.job_id,
+            original_name,
+            total,
+            suffix,
+            bool(calibration),
+        )
+
         try:
             store.reserve_bytes(record.job_id, output_reservation_bytes)
             executor.submit_reserved(
@@ -310,6 +324,7 @@ def create_app(
                 processor_factory,
                 record,
                 processing_timeout_seconds,
+                progress_timeout_seconds,
                 output_reservation_bytes,
                 rule_config,
                 on_cancel=lambda: _cancel_job(store, record.job_id),
@@ -422,6 +437,7 @@ def _run_job(
     processor_factory: ProcessorFactory,
     record: JobRecord,
     processing_timeout_seconds: float,
+    progress_timeout_seconds: float,
     output_reservation_bytes: int,
     rule_config: RuleConfig | None = None,
 ) -> None:
@@ -443,24 +459,50 @@ def _run_job(
     try:
         store.update(record.job_id, status="running", progress=0.01)
         worker.start()
+        LOGGER.info("Job %s worker started (pid %s)", record.job_id, worker.pid)
         deadline = time.monotonic() + processing_timeout_seconds
         result: dict[str, object] | None = None
         error_message: str | None = None
-        while worker.is_alive() and time.monotonic() < deadline:
+        last_progress_time = time.monotonic()
+        while (
+            worker.is_alive()
+            and time.monotonic() < deadline
+            and time.monotonic() - last_progress_time < progress_timeout_seconds
+        ):
             worker.join(
                 timeout=min(
                     0.05,
                     max(0.0, deadline - time.monotonic()),
                 )
             )
-            result, error_message = _drain_processor_messages(
+            new_result, new_error, received = _drain_processor_messages(
                 messages,
                 store,
                 record.job_id,
                 result,
                 error_message,
             )
+            if received:
+                last_progress_time = time.monotonic()
+            if new_result is not None:
+                result = new_result
+            if new_error is not None:
+                error_message = new_error
         if worker.is_alive():
+            no_progress = (
+                time.monotonic() - last_progress_time
+            ) >= progress_timeout_seconds
+            error = (
+                PUBLIC_PROGRESS_TIMEOUT_ERROR
+                if no_progress
+                else PUBLIC_TIMEOUT_ERROR
+            )
+            LOGGER.warning(
+                "Job %s timed out: no_progress=%s deadline_reached=%s",
+                record.job_id,
+                no_progress,
+                time.monotonic() >= deadline,
+            )
             worker.terminate()
             worker.join(timeout=5.0)
             if worker.is_alive():
@@ -471,16 +513,16 @@ def _run_job(
             store.update(
                 record.job_id,
                 status="failed",
-                error=PUBLIC_TIMEOUT_ERROR,
+                error=error,
             )
             return
-        result, error_message = _drain_processor_messages(
+        result, error_message, _ = _drain_processor_messages(
             messages,
             store,
             record.job_id,
             result,
             error_message,
-            wait_seconds=0.2,
+            wait_seconds=2.0,
         )
         if error_message is not None:
             raise RuntimeError(error_message)
@@ -545,8 +587,9 @@ def _drain_processor_messages(
     result: dict[str, object] | None,
     error_message: str | None,
     wait_seconds: float = 0.0,
-) -> tuple[dict[str, object] | None, str | None]:
+) -> tuple[dict[str, object] | None, str | None, int]:
     first = True
+    received = 0
     while True:
         try:
             kind, payload = messages.get(
@@ -555,13 +598,14 @@ def _drain_processor_messages(
         except Empty:
             break
         first = False
+        received += 1
         if kind == "progress":
             store.update(job_id, progress=float(payload))
         elif kind == "result" and isinstance(payload, dict):
             result = payload
         elif kind == "error":
             error_message = str(payload)
-    return result, error_message
+    return result, error_message, received
 
 
 def _publish_staged_outputs(staging_dir: Path, output_dir: Path) -> None:

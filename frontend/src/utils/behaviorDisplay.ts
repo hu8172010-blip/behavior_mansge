@@ -54,6 +54,8 @@ export function isEvidenceJson(text: string | null | undefined): boolean {
 export function formatBehaviorDesc(description: string | null | undefined, typeName?: string | null): string {
   if (!description) return "";
   const trimmed = description.trim();
+  // 疑似 JSON 但解析失败（如被截断）：按未知事件兜底，不渲染原始 JSON 片段
+  if (trimmed.startsWith("{") && !isEvidenceJson(trimmed)) return UNKNOWN_TEXT;
   if (isEvidenceJson(trimmed)) {
     try {
       const payload = JSON.parse(trimmed) as {

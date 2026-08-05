@@ -218,7 +218,7 @@ async function publishRecord() {
       device_ids: [selectedDevice.value],
       record_name: `模拟-${videoFile.value?.name || "识别结果"}`,
       video_filename: videoFile.value?.name || "",
-      video_url: videoUrl.value || modelJobVideoUrl(singleJobId.value) || "",
+      video_url: singleJobId.value ? modelJobVideoUrl(singleJobId.value) : "",
       result: result.value,
     });
     isPublished.value = true;

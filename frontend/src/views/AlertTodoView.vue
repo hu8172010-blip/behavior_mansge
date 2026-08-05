@@ -5,6 +5,7 @@ import { api, type AlertItem, type MetaEnums, type WorkOrderItem } from "../api"
 import { useAuthStore } from "../stores/auth";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 import { formatBehaviorDesc } from "../utils/behaviorDisplay";
+import { modelGetJob } from "../api/model";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -138,15 +139,37 @@ function openReview(item: AlertItem) {
   showReview.value = true;
 }
 
-function openVideo(item: AlertItem) {
-  const urls = [item.video_path, item.video_path_b].filter(Boolean);
+function extractVideoJobId(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/\/api\/jobs\/([^/]+)\/video$/);
+  return match ? match[1] : null;
+}
+
+async function openVideo(item: AlertItem | null) {
+  if (!item) return;
+  const urls = [item.video_path, item.video_path_b].filter(Boolean) as string[];
   if (!urls.length) {
-    alert("未关联原始视频");
+    errorText.value = "未关联原始视频";
     return;
   }
-  for (const u of urls) {
-    if (u) window.open(u, "_blank");
+  const jobIds = urls.map(extractVideoJobId).filter(Boolean) as string[];
+  if (!jobIds.length) {
+    errorText.value = "视频地址格式异常，无法回放";
+    return;
   }
+  for (const jobId of jobIds) {
+    try {
+      const job = await modelGetJob(jobId);
+      if (!job.video_url) {
+        errorText.value = "视频资源已过期清理，无法回放";
+        return;
+      }
+    } catch {
+      errorText.value = "视频资源已过期清理，无法回放";
+      return;
+    }
+  }
+  urls.forEach((u) => window.open(u, "_blank"));
 }
 
 async function submitReview() {
@@ -248,7 +271,7 @@ onMounted(async () => {
           <span>{{ item.region_name || "—" }}<br /><small>{{ item.device_name }}</small></span>
           <span>{{ item.status_name }}<br /><small v-if="item.track_id"><button class="link" @click="detailChainId = item.track_id">查看轨迹</button></small></span>
           <span class="row-actions">
-            <button v-if="item.alert_status_id === 1" class="btn-sm" :disabled="submitting" @click="openVideo(item)">查看视频</button>
+            <button v-if="item.alert_status_id === 1" class="btn-sm" :disabled="submitting || (!item.video_path && !item.video_path_b)" @click="openVideo(item)">查看视频</button>
             <button v-if="item.alert_status_id === 1" class="btn-sm btn-confirm" :disabled="submitting" @click="openReview(item)">人工复核</button>
             <button v-if="item.alert_status_id === 2 && auth.hasPermission('alarm:assign')" class="btn-sm btn-assign" :disabled="submitting" @click="openAssign(item)">派单</button>
             <span v-if="item.alert_status_id >= 3 && item.alert_status_id <= 5">—</span>
@@ -343,7 +366,7 @@ onMounted(async () => {
         </div>
         <div class="toolbar" style="margin-top: 16px">
           <button class="primary" :disabled="submitting" @click="submitReview">确认归档</button>
-          <button :disabled="submitting" @click="openVideo(currentReview!)">查看视频</button>
+          <button :disabled="submitting || (currentReview && !currentReview.video_path && !currentReview.video_path_b)" @click="openVideo(currentReview)">查看视频</button>
         </div>
       </div>
     </div>

@@ -235,6 +235,24 @@ async function publishRecord() {
   }
 }
 
+const clearingSandbox = ref(false);
+
+async function clearSandbox() {
+  if (clearingSandbox.value) return;
+  if (!confirm("⚠️ 警告：此操作将删除全部模拟业务数据（带“模拟”标签的异常行为/预警/工单/轨迹/人员），且不可恢复！\n\n确认继续吗？")) return;
+  if (!confirm("请再次确认：真的要清空全部模拟数据吗？")) return;
+  clearingSandbox.value = true;
+  try {
+    await api.labClearSandbox();
+    message.value = "全部模拟数据已清空";
+    messageType.value = "success";
+  } catch (e: any) {
+    alert(e?.message || "清空失败");
+  } finally {
+    clearingSandbox.value = false;
+  }
+}
+
 function runSimulation() {
   if (!result.value) return;
   const out: string[] = [];
@@ -506,6 +524,9 @@ onBeforeUnmount(() => {
             {{ isPublished ? "已发布" : "发布到业务" }}
           </button>
           <button class="danger" style="margin-left: auto" :disabled="!canDeleteJob" @click="deleteSingleJob">删除任务</button>
+          <button class="danger" :disabled="clearingSandbox" @click="clearSandbox">
+            {{ clearingSandbox ? "清空中..." : "清空模拟数据" }}
+          </button>
         </div>
         <div v-if="analyzing || singleStatus" class="progress-wrap">
           <div class="progress-bar" :style="{ width: Math.round(progress * 100) + '%' }"></div>

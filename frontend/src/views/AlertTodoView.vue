@@ -2,7 +2,6 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, type AlertItem, type MetaEnums, type WorkOrderItem } from "../api";
-import dayjs from "dayjs";
 import { useAuthStore } from "../stores/auth";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 import { formatBehaviorDesc } from "../utils/behaviorDisplay";
@@ -152,10 +151,18 @@ const videoPlayerLoading = ref(false);
 const videoPlayerError = ref("");
 let videoLoadTimer: number | null = null;
 
+function formatLocalDateTime(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 const videoPlayerTitle = computed(() => {
   const alert = videoPlayerAlert.value;
   if (!alert) return "视频回放";
-  return `视频回放 - ${alert.device_name || "摄像头"}（${dayjs(alert.alert_time).format("YYYY-MM-DD HH:mm:ss")}）`;
+  return `视频回放 - ${alert.device_name || "摄像头"}（${formatLocalDateTime(alert.alert_time)}）`;
 });
 
 function getVideoJobIds(item: AlertItem): string[] {

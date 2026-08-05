@@ -18,7 +18,6 @@ import SystemUserView from "../views/SystemUserView.vue";
 import UserProfileView from "../views/UserProfileView.vue";
 import WorkOrderDetailView from "../views/WorkOrderDetailView.vue";
 import LabSimulationView from "../views/LabSimulationView.vue";
-import LabRecordsView from "../views/LabRecordsView.vue";
 import DataBackupView from "../views/DataBackupView.vue";
 
 const placeholder = (title: string, perm: string) => ({ component: PlaceholderView, meta: { title, perm } });
@@ -43,7 +42,7 @@ const router = createRouter({
     { path: "/alarm/todo", component: AlertTodoView, meta: { title: "告警待办队列", perm: "alarm:view" } },
     { path: "/workorder/detail/:orderId", component: WorkOrderDetailView, meta: { title: "处置工单详情", perm: "alarm:view" } },
     { path: "/lab/simulation", component: LabSimulationView, meta: { title: "模拟实验室", perm: "data:view" } },
-    { path: "/lab/records", component: LabRecordsView, meta: { title: "我的模拟记录", perm: "data:view" } },
+    { path: "/lab/records", redirect: "/403" },
     { path: "/system/index", component: SystemPermView, meta: { title: "权限管理", perm: "system:view" } },
     { path: "/system/role", component: SystemRoleView, meta: { title: "角色管理", perm: "system:view" } },
     { path: "/system/user", component: SystemUserView, meta: { title: "账号管理", perm: "system:view" } },

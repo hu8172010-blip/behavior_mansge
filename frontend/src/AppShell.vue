@@ -20,7 +20,7 @@ const navGroups: NavGroup[] = [
   { label: "数据管理", items: [{ text: "数据管理首页", path: "/data/index", icon: "▤", perm: "data:view" }, { text: "异常行为记录", path: "/data/abnormal-record", icon: "!", perm: "behavior:query" }, { text: "轨迹记录", path: "/data/track-record", icon: "⌁", perm: "track:query" }, { text: "备份与恢复", path: "/data/backup", icon: "↥", perm: "data:view" }, { text: "用户资料", path: "/data/user-profile", icon: "♙", perm: "person:query" }, { text: "操作日志", path: "/data/operation-log", icon: "≡", perm: "log:view" }] },
   { label: "告警与工单", items: [{ text: "告警待办", path: "/alarm/todo", icon: "⚠", perm: "alarm:view" }] },
   { label: "用户权限", items: [{ text: "权限管理", path: "/system/index", icon: "⚙", perm: "system:view" }, { text: "角色管理", path: "/system/role", icon: "◈", perm: "system:view" }, { text: "账号管理", path: "/system/user", icon: "♙", perm: "system:view" }] },
-  { label: "模拟实验", items: [{ text: "模拟实验室", path: "/lab/simulation", icon: "◬", perm: "data:view" }, { text: "我的模拟记录", path: "/lab/records", icon: "☰", perm: "data:view" }] },
+  { label: "模拟实验", items: [{ text: "模拟实验室", path: "/lab/simulation", icon: "◬", perm: "data:view" }] },
 ];
 
 const visibleNavGroups = computed(() =>

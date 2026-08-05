@@ -166,7 +166,7 @@ async function startAnalyze() {
           }
           if (!recordId.value && st.record_id) recordId.value = st.record_id;
           if (!recordId.value) {
-            message.value = `识别完成！事件 ${summary.value?.total_events || 0} 个，轨迹 ${summary.value?.total_tracks || 0} 条。` + "\n⚠️ 记录保存超时，请前往“我的模拟记录”查看。点击发布仍可继续。";
+            message.value = `识别完成！事件 ${summary.value?.total_events || 0} 个，轨迹 ${summary.value?.total_tracks || 0} 条。` + "\n⚠️ 记录保存超时，请直接点击“发布到业务”继续发布。";
             messageType.value = "info";
             clearPoll();
             loading.value = false;
@@ -234,16 +234,6 @@ async function publishRecord() {
     messageType.value = "error";
   } finally {
     loading.value = false;
-  }
-}
-
-async function clearSandbox() {
-  if (!window.confirm("确定清空所有模拟实验室数据吗？此操作不可恢复。")) return;
-  try {
-    await api.labClearSandbox();
-    alert("模拟数据已清空");
-  } catch (e: any) {
-    alert(e?.message || "清空失败");
   }
 }
 
@@ -339,7 +329,7 @@ onBeforeUnmount(() => {
         <button class="success" :disabled="!canPublish || loading" @click="publishRecord">
           {{ isPublished ? "已发布" : "发布到业务" }}
         </button>
-        <button class="danger" @click="clearSandbox" style="margin-left: auto">清空模拟数据</button>
+
       </div>
       <div v-if="loading" class="progress-wrap">
         <div class="progress-bar" :style="{ width: progress + '%' }"></div>
@@ -412,7 +402,7 @@ onBeforeUnmount(() => {
           点击“发布到业务”将把识别结果写入模拟业务数据（带标记），可在告警/工单等页面查看。
         </p>
         <p v-if="isPublished" style="margin-top: 8px; font-size: 12px; color: #52c41a">
-          数据已成功发布。您可以前往“我的模拟记录”查看详情，或使用全局开关查看包含模拟数据的业务列表。
+          数据已成功发布。请使用顶部“过滤模拟数据”开关查看包含模拟数据的业务列表。
         </p>
       </div>
     </div>

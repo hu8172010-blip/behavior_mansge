@@ -1,6 +1,6 @@
 from datetime import datetime, time, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,18 +23,21 @@ router = APIRouter(dependencies=[Depends(get_current_account)])
 
 
 @router.get("/summary")
-async def summary(db: AsyncSession = Depends(get_db)):
+async def summary(
+    include_lab: bool = Query(False, description="是否包含模拟实验室数据"),
+    db: AsyncSession = Depends(get_db),
+):
     today_start = datetime.combine(datetime.now().date(), time.min)
 
     today_events = (
-        await db.execute(select(func.count()).select_from(FaAbnormalBehavior).where(FaAbnormalBehavior.detected_at >= today_start, FaAbnormalBehavior.is_lab == 0))
+        await db.execute(select(func.count()).select_from(FaAbnormalBehavior).where(FaAbnormalBehavior.detected_at >= today_start, FaAbnormalBehavior.is_lab == 0 if not include_lab else True))
     ).scalar_one()
-    total_events = (await db.execute(select(func.count()).select_from(FaAbnormalBehavior).where(FaAbnormalBehavior.is_lab == 0))).scalar_one()
+    total_events = (await db.execute(select(func.count()).select_from(FaAbnormalBehavior).where(FaAbnormalBehavior.is_lab == 0 if not include_lab else True))).scalar_one()
     pending_alerts = (
-        await db.execute(select(func.count()).select_from(FaBehaviorAlert).where(FaBehaviorAlert.alert_status_id == 1, FaBehaviorAlert.is_lab == 0))
+        await db.execute(select(func.count()).select_from(FaBehaviorAlert).where(FaBehaviorAlert.alert_status_id == 1, FaBehaviorAlert.is_lab == 0 if not include_lab else True))
     ).scalar_one()
     active_tracks = (
-        await db.execute(select(func.count()).select_from(TrackPassChain).where(TrackPassChain.chain_status == 1, TrackPassChain.is_lab == 0))
+        await db.execute(select(func.count()).select_from(TrackPassChain).where(TrackPassChain.chain_status == 1, TrackPassChain.is_lab == 0 if not include_lab else True))
     ).scalar_one()
 
     device_total = (await db.execute(select(func.count()).select_from(Device).where(Device.is_deleted == 0))).scalar_one()
@@ -53,7 +56,7 @@ async def summary(db: AsyncSession = Depends(get_db)):
     trend_rows = (
         await db.execute(
             select(func.hour(FaAbnormalBehavior.detected_at).label("hour"), func.count())
-            .where(FaAbnormalBehavior.detected_at >= today_start, FaAbnormalBehavior.is_lab == 0)
+            .where(FaAbnormalBehavior.detected_at >= today_start, FaAbnormalBehavior.is_lab == 0 if not include_lab else True)
             .group_by("hour")
             .order_by("hour")
         )
@@ -74,7 +77,7 @@ async def summary(db: AsyncSession = Depends(get_db)):
             .join(DmBehaviorType, DmBehaviorType.behavior_type_id == FaAbnormalBehavior.behavior_type_id)
             .join(DmSeverityLevel, DmSeverityLevel.severity_level_id == FaBehaviorAlert.severity_level_id)
             .outerjoin(Device, Device.id == FaAbnormalBehavior.camera_id)
-            .where(FaBehaviorAlert.alert_status_id == 1, FaBehaviorAlert.is_lab == 0)
+            .where(FaBehaviorAlert.alert_status_id == 1, FaBehaviorAlert.is_lab == 0 if not include_lab else True)
             .order_by(FaBehaviorAlert.alert_time.desc())
             .limit(5)
         )
@@ -107,19 +110,22 @@ async def summary(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/data-index")
-async def data_index(db: AsyncSession = Depends(get_db)):
-    behavior_total = (await db.execute(select(func.count()).select_from(FaAbnormalBehavior).where(FaAbnormalBehavior.is_lab == 0))).scalar_one()
-    track_total = (await db.execute(select(func.count()).select_from(TrackPassChain).where(TrackPassChain.is_lab == 0))).scalar_one()
-    alert_total = (await db.execute(select(func.count()).select_from(FaBehaviorAlert).where(FaBehaviorAlert.is_lab == 0))).scalar_one()
-    work_order_total = (await db.execute(select(func.count()).select_from(FaWorkOrder).where(FaWorkOrder.is_lab == 0))).scalar_one()
-    person_total = (await db.execute(select(func.count()).select_from(DmAnonymousPerson).where(DmAnonymousPerson.is_lab == 0))).scalar_one()
+async def data_index(
+    include_lab: bool = Query(False, description="是否包含模拟实验室数据"),
+    db: AsyncSession = Depends(get_db),
+):
+    behavior_total = (await db.execute(select(func.count()).select_from(FaAbnormalBehavior).where(FaAbnormalBehavior.is_lab == 0 if not include_lab else True))).scalar_one()
+    track_total = (await db.execute(select(func.count()).select_from(TrackPassChain).where(TrackPassChain.is_lab == 0 if not include_lab else True))).scalar_one()
+    alert_total = (await db.execute(select(func.count()).select_from(FaBehaviorAlert).where(FaBehaviorAlert.is_lab == 0 if not include_lab else True))).scalar_one()
+    work_order_total = (await db.execute(select(func.count()).select_from(FaWorkOrder).where(FaWorkOrder.is_lab == 0 if not include_lab else True))).scalar_one()
+    person_total = (await db.execute(select(func.count()).select_from(DmAnonymousPerson).where(DmAnonymousPerson.is_lab == 0 if not include_lab else True))).scalar_one()
     device_total = (await db.execute(select(func.count()).select_from(Device).where(Device.is_deleted == 0))).scalar_one()
 
     type_rows = (
         await db.execute(
             select(DmBehaviorType.behavior_type_id, DmBehaviorType.type_name, func.count(FaAbnormalBehavior.behavior_id))
             .join(FaAbnormalBehavior, FaAbnormalBehavior.behavior_type_id == DmBehaviorType.behavior_type_id)
-            .where(FaAbnormalBehavior.is_lab == 0)
+            .where(FaAbnormalBehavior.is_lab == 0 if not include_lab else True)
             .group_by(DmBehaviorType.behavior_type_id)
             .order_by(func.count(FaAbnormalBehavior.behavior_id).desc())
         )
@@ -130,7 +136,7 @@ async def data_index(db: AsyncSession = Depends(get_db)):
         await db.execute(
             select(Device.region_name, func.count(FaAbnormalBehavior.behavior_id))
             .join(Device, Device.id == FaAbnormalBehavior.camera_id)
-            .where(Device.is_deleted == 0, FaAbnormalBehavior.is_lab == 0)
+            .where(Device.is_deleted == 0, FaAbnormalBehavior.is_lab == 0 if not include_lab else True)
             .group_by(Device.region_name)
             .order_by(func.count(FaAbnormalBehavior.behavior_id).desc())
         )
@@ -141,7 +147,7 @@ async def data_index(db: AsyncSession = Depends(get_db)):
     trend_rows = (
         await db.execute(
             select(func.date(FaAbnormalBehavior.detected_at).label("day"), func.count())
-            .where(FaAbnormalBehavior.detected_at >= week_start, FaAbnormalBehavior.is_lab == 0)
+            .where(FaAbnormalBehavior.detected_at >= week_start, FaAbnormalBehavior.is_lab == 0 if not include_lab else True)
             .group_by("day")
             .order_by("day")
         )

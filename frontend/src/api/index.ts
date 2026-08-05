@@ -456,7 +456,7 @@ export const api = {
   registerRoles: () => http.get<EnumOption[]>("/auth/roles"),
   enums: () => http.get<MetaEnums>("/meta/enums"),
   publicEnums: () => http.get<MetaEnums>("/meta/enums"),
-  dashboard: () => http.get<DashboardSummary>("/dashboard/summary"),
+  dashboard: () => http.get<DashboardSummary>("/dashboard/summary", { ...getLabIncludeParam() }),
   todoCount: () => http.get<{ count: number }>("/alerts/todo-count", { ...getLabIncludeParam() }),
   alerts: (params: { status_id?: number; severity_id?: number; keyword?: string; page: number; size: number }) =>
     http.get<PageData<AlertItem>>("/alerts", { ...params, ...getLabIncludeParam() }),
@@ -533,7 +533,7 @@ export const api = {
   saveRolePermissions: (typeId: number, perm_ids: number[]) => http.put(`/system/roles/${typeId}/permissions`, { perm_ids }),
   deleteRole: (typeId: number) => http.delete<void>(`/system/roles/${typeId}`),
   createRole: (body: { type_name: string; type_desc?: string }) => http.post<{ type_id: number }>("/system/roles", body),
-  dataIndex: () => http.get<DataIndexSummary>("/dashboard/data-index"),
+  dataIndex: () => http.get<DataIndexSummary>("/dashboard/data-index", { ...getLabIncludeParam() }),
   personDetail: (personId: number) => http.get<PersonDetail>(`/persons/${personId}`),
   exportBehaviors: (params: { type_id?: number; severity_id?: number; status_id?: number; camera_id?: number; region_name?: string; start_time?: string; end_time?: string; keyword?: string }) =>
     http.download("/behaviors/export", params, "abnormal_behaviors.csv"),

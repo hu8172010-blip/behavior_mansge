@@ -490,10 +490,14 @@ export const api = {
   trackDetail: (chainId: number) => http.get<TrackDetail>(`/tracks/${chainId}`),
   devices: (params: { status?: string; device_type?: string; keyword?: string; page: number; size: number }) =>
     http.get<PageData<DeviceItem>>("/devices", params),
+  exportDevices: (params: { status?: string; device_type?: string; keyword?: string }) =>
+    http.download("/devices/export", params, "devices.csv"),
   createDevice: (body: Partial<DeviceItem> & { device_code: string; device_name: string }) => http.post("/devices", body),
   updateDevice: (id: number, body: Partial<DeviceItem>) => http.put(`/devices/${id}`, body),
   faults: (params: { device_id?: number; disposal_status?: string; page: number; size: number }) =>
     http.get<PageData<FaultItem>>("/devices/faults/list", params),
+  exportFaults: (params: { device_id?: number; disposal_status?: string }) =>
+    http.download("/devices/faults/export", params, "faults.csv"),
   closeFault: (id: number) => http.put(`/devices/faults/${id}/close`),
   simulateFault: (id: number, body: { fault_type?: string; fault_level?: string; fault_desc?: string }) =>
     http.post<SimulateFaultResult>(`/devices/${id}/simulate-fault`, body),
@@ -509,6 +513,16 @@ export const api = {
     page: number;
     size: number;
   }) => http.get<PageData<RepairOrderItem>>("/devices/repair-orders", { ...params, only_mine: params.only_mine ? "true" : undefined }),
+  exportRepairOrders: (params: {
+    status?: string;
+    keyword?: string;
+    fault_id?: number;
+    assigned_to?: number;
+    assigned_name?: string;
+    start_time?: string;
+    end_time?: string;
+    only_mine?: boolean;
+  }) => http.download("/devices/repair-orders/export", { ...params, only_mine: params.only_mine ? "true" : undefined }, "repair_orders.csv"),
   repairOrderDetail: (id: number) => http.get<RepairOrderDetail>(`/devices/repair-orders/${id}`),
   repairCandidates: () => http.get<RepairCandidateItem[]>("/devices/repair-candidates"),
   acceptRepairOrder: (id: number) => http.post(`/devices/repair-orders/${id}/accept`),

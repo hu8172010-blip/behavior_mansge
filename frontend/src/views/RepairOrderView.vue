@@ -34,6 +34,7 @@ const total = ref(0);
 const jumpPage = ref<number | null>(null);
 const orders = ref<RepairOrderItem[]>([]);
 const loading = ref(false);
+const exporting = ref(false);
 const submitting = ref(false);
 
 const showDetail = ref(false);
@@ -81,6 +82,24 @@ async function loadOrders() {
 function search() {
   page.value = 1;
   loadOrders();
+}
+
+async function exportOrders() {
+  exporting.value = true;
+  try {
+    await api.exportRepairOrders({
+      status: filters.status || undefined,
+      keyword: filters.keyword || undefined,
+      assigned_to: filters.assigned_to ? Number(filters.assigned_to) : undefined,
+      assigned_name: !filters.assigned_to && assigneeInput.value.trim() ? assigneeInput.value.trim() : undefined,
+      start_time: filters.start_time || undefined,
+      end_time: filters.end_time || undefined,
+    });
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    exporting.value = false;
+  }
 }
 
 function goToPage() {
@@ -158,6 +177,7 @@ watch(() => settings.filterLabData, () => loadOrders());
         <input v-model="filters.end_time" class="filter-input" type="date" title="创建时间止" @change="search" />
         <button class="primary" @click="search">查询</button>
         <button @click="resetFilters">重置</button>
+        <button :disabled="exporting" @click="exportOrders">{{ exporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full repair-table">
         <div class="table-head"><span>工单编号</span><span>关联设备</span><span>故障类型</span><span>状态</span><span>维修负责人</span><span>创建时间</span><span>计划处理</span><span>损坏原因</span><span>维修情况</span><span>操作</span></div>

@@ -41,6 +41,7 @@ const devTotal = ref(0);
 const devJump = ref<number | null>(null);
 const devices = ref<DeviceItem[]>([]);
 const devLoading = ref(false);
+const devExporting = ref(false);
 const showBehaviors = ref(false);
 const currentDevice = ref<DeviceItem | null>(null);
 const deviceBehaviors = ref<any[]>([]);
@@ -53,6 +54,7 @@ const faultTotal = ref(0);
 const faultJump = ref<number | null>(null);
 const faults = ref<FaultItem[]>([]);
 const faultLoading = ref(false);
+const faultExporting = ref(false);
 
 const showEditor = ref(false);
 const editingId = ref<number | null>(null);
@@ -119,6 +121,21 @@ function searchDevices() {
   loadDevices();
 }
 
+async function exportDevices() {
+  devExporting.value = true;
+  try {
+    await api.exportDevices({
+      status: devStatus.value || undefined,
+      device_type: devType.value || undefined,
+      keyword: devKeyword.value || undefined,
+    });
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    devExporting.value = false;
+  }
+}
+
 async function viewBehaviors(item: DeviceItem) {
   currentDevice.value = item;
   showBehaviors.value = true;
@@ -137,6 +154,19 @@ async function viewBehaviors(item: DeviceItem) {
 function searchFaults() {
   faultPage.value = 1;
   loadFaults();
+}
+
+async function exportFaults() {
+  faultExporting.value = true;
+  try {
+    await api.exportFaults({
+      disposal_status: faultStatus.value || undefined,
+    });
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    faultExporting.value = false;
+  }
 }
 
 function goToDevPage() {
@@ -290,6 +320,7 @@ function resetFaultFilter() {
         </select>
         <button class="primary" @click="searchDevices">查询</button>
         <button @click="resetDeviceFilter">重置</button>
+        <button :disabled="devExporting" @click="exportDevices">{{ devExporting ? "导出中..." : "导出 CSV" }}</button>
         <button v-if="auth.hasPermission('device:create')" class="primary" @click="openCreate">+ 新增设备</button>
       </div>
       <div class="table full">
@@ -330,6 +361,7 @@ function resetFaultFilter() {
         </select>
         <button class="primary" @click="searchFaults">查询</button>
         <button @click="resetFaultFilter">重置</button>
+        <button :disabled="faultExporting" @click="exportFaults">{{ faultExporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">
         <div class="table-head"><span>发生时间</span><span>设备</span><span>故障类型</span><span>级别</span><span>描述</span><span>处置状态</span><span>操作</span></div>

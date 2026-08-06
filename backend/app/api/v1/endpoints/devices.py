@@ -1,7 +1,10 @@
+import csv
+import io
 import json
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -82,6 +85,40 @@ async def list_devices(
     total = (await db.execute(count_stmt)).scalar_one()
     rows = (await db.execute(stmt.order_by(Device.id).offset((page - 1) * size).limit(size))).scalars().all()
     return ok(page_result([device_to_dict(d) for d in rows], total, page, size))
+
+
+@router.get("/export")
+async def export_devices(
+    status: str | None = Query(default=None),
+    device_type: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: SysAccount = Depends(require_permission("device:info:view")),
+):
+    stmt = select(Device).where(Device.is_deleted == 0)
+    if status:
+        stmt = stmt.where(Device.status == status)
+    if device_type:
+        stmt = stmt.where(Device.device_type == device_type)
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(or_(Device.device_name.like(like), Device.device_code.like(like), Device.location_text.like(like)))
+    rows = (await db.execute(stmt.order_by(Device.id).limit(5000))).scalars().all()
+    status_map = {"ONLINE": "在线", "OFFLINE": "离线", "FAULT": "故障", "DISABLED": "停用"}
+    type_map = {"CAMERA": "摄像头", "NVR": "录像机", "EDGE": "边缘分析盒"}
+    buffer = io.StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["ID", "设备编号", "设备名称", "设备类型", "安装位置", "所属区域", "状态", "健康分", "最近心跳", "通道数", "IP地址", "端口", "厂商", "型号", "安装时间", "备注", "操作人"])
+    for d in rows:
+        writer.writerow([
+            d.id, d.device_code, d.device_name, type_map.get(d.device_type, d.device_type),
+            d.location_text or "", d.region_name or "", status_map.get(d.status, d.status),
+            d.health_score, fmt(d.last_heartbeat_time) or "", d.channel_count or "",
+            d.ip_address or "", d.port or "", d.manufacturer or "", d.model or "",
+            fmt(d.install_time) or "", d.remark or "", d.operator_name or "",
+        ])
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=devices.csv"})
 
 
 class DeviceBody(BaseModel):
@@ -210,6 +247,41 @@ async def list_faults(
         for row in rows
     ]
     return ok(page_result(items, total, page, size))
+
+
+@router.get("/faults/export")
+async def export_faults(
+    device_id: int | None = Query(default=None),
+    disposal_status: str | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: SysAccount = Depends(require_permission("device:info:view")),
+):
+    stmt = (
+        select(FaultRecord, Device.device_name)
+        .join(Device, Device.id == FaultRecord.device_id)
+        .where(FaultRecord.is_deleted == 0)
+    )
+    if device_id is not None:
+        stmt = stmt.where(FaultRecord.device_id == device_id)
+    if disposal_status:
+        stmt = stmt.where(FaultRecord.disposal_status == disposal_status)
+    rows = (
+        await db.execute(stmt.order_by(FaultRecord.occurrence_time.desc()).limit(5000))
+    ).all()
+    status_map = {"PENDING": "待处理", "ASSIGNED": "已派单", "REPAIRED": "已修复", "AUTO_RECOVERED": "自动恢复", "CLOSED": "已关闭"}
+    buffer = io.StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["ID", "设备ID", "设备编号", "设备名称", "故障类型", "故障级别", "故障描述", "发生时间", "恢复时间", "处置状态", "维修负责人", "维修结果", "维修备注"])
+    for row in rows:
+        f = row[0]
+        writer.writerow([
+            f.id, f.device_id, f.device_code, row[1], f.fault_type, f.fault_level,
+            f.fault_desc or "", fmt(f.occurrence_time) or "", fmt(f.recovery_time) or "",
+            status_map.get(f.disposal_status, f.disposal_status), f.assigned_name or "",
+            f.repair_result or "", f.repair_remark or "",
+        ])
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=faults.csv"})
 
 
 @router.put("/faults/{fault_id}/close")
@@ -442,6 +514,7 @@ async def list_repair_orders(
     keyword: str | None = Query(default=None),
     fault_id: int | None = Query(default=None),
     assigned_to: int | None = Query(default=None),
+    assigned_name: str | None = Query(default=None, description="按维修负责人姓名模糊搜索"),
     start_time: str | None = Query(default=None),
     end_time: str | None = Query(default=None),
     only_mine: bool = Query(default=False),
@@ -465,6 +538,9 @@ async def list_repair_orders(
     if assigned_to is not None:
         stmt = stmt.where(RepairOrder.assigned_to == assigned_to)
         count_stmt = count_stmt.where(RepairOrder.assigned_to == assigned_to)
+    if assigned_name:
+        stmt = stmt.join(SysAccount, SysAccount.account_id == RepairOrder.assigned_to).where(SysAccount.real_name.like(f"%{assigned_name}%"))
+        count_stmt = count_stmt.join(SysAccount, SysAccount.account_id == RepairOrder.assigned_to).where(SysAccount.real_name.like(f"%{assigned_name}%"))
     if only_mine:
         stmt = stmt.where(RepairOrder.assigned_to == account.account_id)
         count_stmt = count_stmt.where(RepairOrder.assigned_to == account.account_id)
@@ -491,6 +567,67 @@ async def list_repair_orders(
         await db.execute(stmt.order_by(RepairOrder.create_time.desc()).offset((page - 1) * size).limit(size))
     ).all()
     return ok(page_result([repair_row_to_dict(row) for row in rows], total, page, size))
+
+
+@router.get("/repair-orders/export")
+async def export_repair_orders(
+    status: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    fault_id: int | None = Query(default=None),
+    assigned_to: int | None = Query(default=None),
+    assigned_name: str | None = Query(default=None),
+    start_time: str | None = Query(default=None),
+    end_time: str | None = Query(default=None),
+    only_mine: bool = Query(default=False),
+    db: AsyncSession = Depends(get_db),
+    account: SysAccount = Depends(require_permission("device:repair")),
+):
+    stmt = (
+        select(RepairOrder, FaultRecord.fault_type, FaultRecord.fault_level, FaultRecord.fault_desc)
+        .join(FaultRecord, FaultRecord.id == RepairOrder.fault_id)
+        .where(RepairOrder.is_deleted == 0)
+    )
+    if status:
+        stmt = stmt.where(RepairOrder.status == status)
+    if fault_id is not None:
+        stmt = stmt.where(RepairOrder.fault_id == fault_id)
+    if assigned_to is not None:
+        stmt = stmt.where(RepairOrder.assigned_to == assigned_to)
+    if assigned_name:
+        stmt = stmt.join(SysAccount, SysAccount.account_id == RepairOrder.assigned_to).where(SysAccount.real_name.like(f"%{assigned_name}%"))
+    if only_mine:
+        stmt = stmt.where(RepairOrder.assigned_to == account.account_id)
+    if start_time:
+        stmt = stmt.where(RepairOrder.create_time >= parse_query_dt(start_time))
+    if end_time:
+        stmt = stmt.where(RepairOrder.create_time <= parse_query_dt(end_time, end_of_day=True))
+    if keyword:
+        like = f"%{keyword}%"
+        cond = or_(
+            RepairOrder.order_no.like(like),
+            RepairOrder.device_name.like(like),
+            RepairOrder.device_code.like(like),
+            Device.location_text.like(like),
+        )
+        stmt = stmt.outerjoin(Device, Device.id == RepairOrder.device_id).where(cond)
+    rows = (
+        await db.execute(stmt.order_by(RepairOrder.create_time.desc()).limit(5000))
+    ).all()
+    status_map = {"PENDING": "待处理", "REPAIRING": "维修中", "COMPLETED": "已完成"}
+    buffer = io.StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["工单号", "关联故障ID", "设备编号", "设备名称", "状态", "故障类型", "故障级别", "故障描述", "损坏原因", "维修情况", "维修负责人", "派单策略", "派单时间", "计划完成时间", "开始时间", "完成时间", "创建时间"])
+    for row in rows:
+        o = row[0]
+        writer.writerow([
+            o.order_no, o.fault_id, o.device_code, o.device_name,
+            status_map.get(o.status, o.status), row[1], row[2], row[3] or "",
+            o.damage_cause or "", o.repair_detail or "", o.assigned_name or "",
+            o.dispatch_strategy or "", fmt(o.assigned_at) or "", fmt(o.plan_finish_time) or "",
+            fmt(o.started_at) or "", fmt(o.completed_at) or "", fmt(o.create_time) or "",
+        ])
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=repair_orders.csv"})
 
 
 @router.get("/repair-candidates")

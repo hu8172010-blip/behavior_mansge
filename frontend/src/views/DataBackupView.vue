@@ -172,9 +172,9 @@ onMounted(() => {
           <button :class="['tab-btn', activeTab === 'log' ? 'active' : '']" @click="activeTab = 'log'">备份日志</button>
         </div>
       </div>
-      <div class="tabs">
+      <div class="toolbar-actions">
         <button class="primary" :disabled="creating" @click="createBackup">{{ creating ? "执行中..." : "立即备份" }}</button>
-        <button :disabled="loading" @click="loadBackups">刷新</button>
+        <button class="secondary" :disabled="loading" @click="loadBackups">刷新</button>
       </div>
     </div>
 
@@ -444,6 +444,35 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 备份与恢复页面 4 个 panel（备份历史/数据恢复/备份日志/恢复日志）
+   默认 .data-panel{min-height:420px} 会把面板撑很高，内容少时下方留出大片空白。
+   这里覆盖为 auto，让面板紧贴内容高度。 */
+:deep(.panel.data-panel) {
+  min-height: auto;
+}
+/* 顶部"立即备份/刷新"操作区：白底大按钮，避开全局 .tabs 的灰色小字样式 */
+.toolbar-actions {
+  display: flex;
+  gap: 10px;
+}
+.toolbar-actions .primary {
+  height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
+  color: #fff;
+  background: #3788e8;
+  border-radius: 5px;
+  font-weight: 500;
+}
+.toolbar-actions .secondary {
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  border: 1px solid #dbe3ed;
+  border-radius: 5px;
+  background: #fff;
+  color: #65748a;
+}
 .tab-btn {
   padding: 6px 16px;
   border-radius: 6px;

@@ -308,6 +308,7 @@ export interface LogItem {
 export interface AccountItem {
   account_id: number;
   login_name: string;
+  password?: string;
   real_name: string;
   dept: string | null;
   phone: string | null;
@@ -462,8 +463,12 @@ export const api = {
     http.get<PageData<AlertItem>>("/alerts", { ...params, ...getLabIncludeParam() }),
   confirmAlert: (alertId: number) => http.post(`/alerts/${alertId}/confirm`),
   ignoreAlert: (alertId: number, note?: string) => http.post(`/alerts/${alertId}/ignore`, { note }),
-  workOrders: (params: { status_id?: number; page: number; size: number }) =>
-    http.get<PageData<WorkOrderItem>>("/workorders", { ...params, ...getLabIncludeParam() }),
+  workOrders: (params: {
+    status_id?: number; severity_id?: number; type_id?: number;
+    assignee_id?: number; assignee_name?: string; keyword?: string;
+    start_time?: string; end_time?: string;
+    page: number; size: number;
+  }) => http.get<PageData<WorkOrderItem>>("/workorders", { ...params, ...getLabIncludeParam() }),
   workOrderDetail: (id: number) => http.get<WorkOrderDetail>(`/workorders/${id}`),
   createWorkOrder: (alert_id: number, assigned_to: number) => http.post("/workorders", { alert_id, assigned_to }),
   handleWorkOrder: (id: number, handle_result: string) => http.put(`/workorders/${id}/handle`, { handle_result }),
@@ -485,10 +490,14 @@ export const api = {
   trackDetail: (chainId: number) => http.get<TrackDetail>(`/tracks/${chainId}`),
   devices: (params: { status?: string; device_type?: string; keyword?: string; page: number; size: number }) =>
     http.get<PageData<DeviceItem>>("/devices", params),
+  exportDevices: (params: { status?: string; device_type?: string; keyword?: string }) =>
+    http.download("/devices/export", params, "devices.csv"),
   createDevice: (body: Partial<DeviceItem> & { device_code: string; device_name: string }) => http.post("/devices", body),
   updateDevice: (id: number, body: Partial<DeviceItem>) => http.put(`/devices/${id}`, body),
   faults: (params: { device_id?: number; disposal_status?: string; page: number; size: number }) =>
     http.get<PageData<FaultItem>>("/devices/faults/list", params),
+  exportFaults: (params: { device_id?: number; disposal_status?: string }) =>
+    http.download("/devices/faults/export", params, "faults.csv"),
   closeFault: (id: number) => http.put(`/devices/faults/${id}/close`),
   simulateFault: (id: number, body: { fault_type?: string; fault_level?: string; fault_desc?: string }) =>
     http.post<SimulateFaultResult>(`/devices/${id}/simulate-fault`, body),
@@ -497,12 +506,23 @@ export const api = {
     keyword?: string;
     fault_id?: number;
     assigned_to?: number;
+    assigned_name?: string;
     start_time?: string;
     end_time?: string;
     only_mine?: boolean;
     page: number;
     size: number;
   }) => http.get<PageData<RepairOrderItem>>("/devices/repair-orders", { ...params, only_mine: params.only_mine ? "true" : undefined }),
+  exportRepairOrders: (params: {
+    status?: string;
+    keyword?: string;
+    fault_id?: number;
+    assigned_to?: number;
+    assigned_name?: string;
+    start_time?: string;
+    end_time?: string;
+    only_mine?: boolean;
+  }) => http.download("/devices/repair-orders/export", { ...params, only_mine: params.only_mine ? "true" : undefined }, "repair_orders.csv"),
   repairOrderDetail: (id: number) => http.get<RepairOrderDetail>(`/devices/repair-orders/${id}`),
   repairCandidates: () => http.get<RepairCandidateItem[]>("/devices/repair-candidates"),
   acceptRepairOrder: (id: number) => http.post(`/devices/repair-orders/${id}/accept`),
@@ -521,9 +541,13 @@ export const api = {
     http.download("/logs/export", params, "operation_logs.csv"),
   accounts: (params: { keyword?: string; type_id?: number; status?: number; page: number; size: number }) =>
     http.get<PageData<AccountItem>>("/system/accounts", params),
+  exportAccounts: (params: { keyword?: string; type_id?: number; status?: number }) =>
+    http.download("/system/accounts/export", params, "accounts.csv"),
   createAccount: (body: { login_name: string; password: string; real_name: string; dept?: string; phone?: string; type_id: number }) =>
     http.post("/system/accounts", body),
   toggleAccountStatus: (accountId: number, status: number) => http.put(`/system/accounts/${accountId}/status`, { status }),
+  changeAccountPassword: (accountId: number, body: { old_password?: string; new_password: string }) =>
+    http.put<void>(`/system/accounts/${accountId}/password`, body),
   accountPermissions: (accountId: number) => http.get<AccountPermInfo>(`/system/accounts/${accountId}/permissions`),
   saveAccountPermissions: (accountId: number, body: { use_custom: number; perm_ids: number[] }) =>
     http.put<void>(`/system/accounts/${accountId}/permissions`, body),
@@ -541,6 +565,11 @@ export const api = {
     http.download("/tracks/export", params, "track_chains.csv"),
   exportAlerts: (params: { status_id?: number; severity_id?: number; keyword?: string }) =>
     http.download("/alerts/export", params, "behavior_alerts.csv"),
+  exportWorkOrders: (params: {
+    status_id?: number; severity_id?: number; type_id?: number;
+    assignee_id?: number; assignee_name?: string; keyword?: string;
+    start_time?: string; end_time?: string;
+  }) => http.download("/workorders/export", { ...params, ...getLabIncludeParam() }, "work_orders.csv"),
   labAnalyze: (video: File, device_id: number, calibration: string, mode: "temp" | "persist", record_name?: string) => {
     const form = new FormData();
     form.append("video", video);

@@ -27,6 +27,10 @@ const showChangePwd = ref(false);
 const pwdAccount = ref<AccountItem | null>(null);
 const pwdForm = reactive({ old_password: "", new_password: "", confirm_password: "" });
 const pwdSubmitting = ref(false);
+// 超管改密码永远免原密码（type_id=1）；其他用户改自己仍需校验
+const pwdIsSelf = computed(() => pwdAccount.value?.account_id === auth.accountId);
+const pwdIsSuper = computed(() => auth.typeId === 1);
+const pwdShowOld = computed(() => pwdIsSelf.value && !pwdIsSuper.value);
 const form = reactive({ login_name: "", password: "", real_name: "", dept: "", phone: "", type_id: 0 });
 const permAccount = ref<AccountItem | null>(null);
 const permissions = ref<PermItem[]>([]);
@@ -114,9 +118,8 @@ async function submitChangePwd() {
   }
   pwdSubmitting.value = true;
   try {
-    const isSelf = pwdAccount.value.account_id === auth.accountId;
     await api.changeAccountPassword(pwdAccount.value.account_id, {
-      old_password: isSelf ? pwdForm.old_password : undefined,
+      old_password: pwdShowOld.value ? pwdForm.old_password : undefined,
       new_password: pwdForm.new_password,
     });
     notice.value = `账号「${pwdAccount.value.login_name}」密码已修改`;
@@ -341,7 +344,7 @@ onMounted(async () => {
         <button class="close" @click="showChangePwd = false">×</button>
         <h2>修改密码 - {{ pwdAccount?.login_name }}</h2>
         <div class="form-grid">
-          <div v-if="pwdAccount && pwdAccount.account_id === auth.accountId" class="form-cell full">
+          <div v-if="pwdShowOld" class="form-cell full">
             <label>原密码</label>
             <input v-model="pwdForm.old_password" type="password" placeholder="请输入当前密码" />
           </div>

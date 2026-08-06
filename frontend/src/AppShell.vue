@@ -42,6 +42,9 @@ const showHelp = ref(false);
 const pwdForm = reactive({ old_password: "", new_password: "", confirm_password: "" });
 const pwdSubmitting = ref(false);
 const pwdError = ref("");
+// 超管改密码免原密码（type_id=1）
+const pwdIsSuper = computed(() => auth.typeId === 1);
+const pwdShowOld = computed(() => !pwdIsSuper.value);
 
 function openChangePwd() {
   pwdForm.old_password = "";
@@ -53,13 +56,13 @@ function openChangePwd() {
 
 async function submitChangePwd() {
   pwdError.value = "";
-  if (!pwdForm.old_password) { pwdError.value = "请输入原密码"; return; }
+  if (pwdShowOld.value && !pwdForm.old_password) { pwdError.value = "请输入原密码"; return; }
   if (pwdForm.new_password.length < 6) { pwdError.value = "新密码至少 6 个字符"; return; }
   if (pwdForm.new_password !== pwdForm.confirm_password) { pwdError.value = "两次输入的新密码不一致"; return; }
   pwdSubmitting.value = true;
   try {
     await api.changeAccountPassword(auth.accountId, {
-      old_password: pwdForm.old_password,
+      old_password: pwdShowOld.value ? pwdForm.old_password : undefined,
       new_password: pwdForm.new_password,
     });
     showChangePwd.value = false;
@@ -171,7 +174,7 @@ watch(
         <button class="close" @click="showChangePwd = false">×</button>
         <h2>修改密码</h2>
         <div class="pwd-form">
-          <div class="pwd-field">
+          <div v-if="pwdShowOld" class="pwd-field">
             <label>原密码</label>
             <input v-model="pwdForm.old_password" type="password" placeholder="请输入当前密码" />
           </div>

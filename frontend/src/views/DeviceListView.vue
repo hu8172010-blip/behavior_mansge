@@ -367,10 +367,10 @@ function resetFaultFilter() {
           <table class="data-table behaviors-table">
             <thead>
               <tr>
-                <th style="width: 160px; white-space: nowrap">时间</th>
-                <th style="width: 100px; white-space: nowrap">类型</th>
-                <th style="width: 70px; white-space: nowrap">级别</th>
-                <th style="width: 90px; white-space: nowrap">状态</th>
+                <th style="width: 130px; white-space: nowrap">时间</th>
+                <th style="width: 80px; white-space: nowrap">类型</th>
+                <th style="width: 60px; white-space: nowrap">级别</th>
+                <th style="width: 80px; white-space: nowrap">状态</th>
                 <th>描述</th>
               </tr>
             </thead>
@@ -461,6 +461,20 @@ function resetFaultFilter() {
 .behaviors-table-wrapper .data-table {
   border-collapse: separate;
   border-spacing: 0;
+}
+/* 行为记录表加竖向网格线，表头与单元格清晰分界 */
+.behaviors-table-wrapper .data-table th,
+.behaviors-table-wrapper .data-table td {
+  border-left: 1px solid #eef2f8;
+  border-right: 1px solid #eef2f8;
+}
+.behaviors-table-wrapper .data-table th:first-child,
+.behaviors-table-wrapper .data-table td:first-child {
+  border-left: 0;
+}
+.behaviors-table-wrapper .data-table th:last-child,
+.behaviors-table-wrapper .data-table td:last-child {
+  border-right: 0;
 }
 .behaviors-table-wrapper .data-table thead th {
   position: sticky;

@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_account
@@ -65,8 +65,19 @@ async def list_persons(
         count_stmt = count_stmt.where(DmAnonymousPerson.is_lab == 0)
     if keyword:
         like = f"%{keyword}%"
-        stmt = stmt.where(DmAnonymousPerson.appearance_desc.like(like))
-        count_stmt = count_stmt.where(DmAnonymousPerson.appearance_desc.like(like))
+        # 支持按人员编号、外貌描述、匹配账号姓名模糊搜索
+        try:
+            keyword_int = int(keyword)
+            person_id_cond = DmAnonymousPerson.person_id == keyword_int
+        except ValueError:
+            person_id_cond = DmAnonymousPerson.person_id == -1
+        cond = or_(
+            DmAnonymousPerson.appearance_desc.like(like),
+            person_id_cond,
+            matched_account.c.real_name.like(like),
+        )
+        stmt = stmt.where(cond)
+        count_stmt = count_stmt.outerjoin(matched_account, matched_account.c.account_id == DmAnonymousPerson.matched_user_id).where(cond)
     if is_focused is not None:
         stmt = stmt.where(DmAnonymousPerson.is_focused == is_focused)
         count_stmt = count_stmt.where(DmAnonymousPerson.is_focused == is_focused)

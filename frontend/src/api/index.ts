@@ -463,6 +463,8 @@ export const api = {
     http.get<PageData<AlertItem>>("/alerts", { ...params, ...getLabIncludeParam() }),
   confirmAlert: (alertId: number) => http.post(`/alerts/${alertId}/confirm`),
   ignoreAlert: (alertId: number, note?: string) => http.post(`/alerts/${alertId}/ignore`, { note }),
+  reviewAlert: (alertId: number, body: { false_positive: boolean; person_identity: string; person_id?: number | null; person_name?: string | null; note?: string }) =>
+    http.post(`/alerts/${alertId}/review`, body),
   workOrders: (params: {
     status_id?: number; severity_id?: number; type_id?: number;
     assignee_id?: number; assignee_name?: string; keyword?: string;

@@ -26,6 +26,7 @@ from app.models import (
     SysTypePermission,
 )
 from app.schemas.common import ok, page_result
+from app.services.device_restore_service import try_restore_device
 from app.services.log_service import write_log
 
 router = APIRouter()
@@ -293,6 +294,22 @@ async def close_fault(fault_id: int, db: AsyncSession = Depends(get_db), account
         raise HTTPException(status_code=404, detail="故障记录不存在")
     if fault.disposal_status == "CLOSED":
         raise HTTPException(status_code=400, detail="该故障已关闭")
+    if fault.disposal_status == "REPAIRED":
+        raise HTTPException(status_code=400, detail="该故障已由维修工单闭环，不可重复关闭")
+    # 仅允许关闭未派单或已派单但无未完结维修工单的故障，避免与 finish_repair_order 双写冲突
+    open_order = (
+        await db.execute(
+            select(RepairOrder.id)
+            .where(
+                RepairOrder.fault_id == fault.id,
+                RepairOrder.is_deleted == 0,
+                RepairOrder.status.in_(("PENDING", "REPAIRING")),
+            )
+            .limit(1)
+        )
+    ).first()
+    if open_order is not None:
+        raise HTTPException(status_code=400, detail="该故障存在未完结维修工单，请先归档工单")
     fault.disposal_status = "CLOSED"
     fault.closed_at = datetime.now()
     fault.closed_by = account.account_id
@@ -645,10 +662,16 @@ async def accept_repair_order(order_id: int, db: AsyncSession = Depends(get_db),
         raise HTTPException(status_code=404, detail="维修工单不存在")
     if order.status != "PENDING":
         raise HTTPException(status_code=400, detail="仅待处理的工单可以接单")
-    if account.type_id != 1 and order.assigned_to != account.account_id:
+    # 自动派单无候选人时 assigned_to 为空，此时允许任意拥有 device:repair 权限的员工接单，
+    # 避免工单永久卡在 PENDING；有负责人时仅负责人或管理员可接单
+    if order.assigned_to is not None and account.type_id != 1 and order.assigned_to != account.account_id:
         raise HTTPException(status_code=403, detail="仅维修负责人或管理员可以接单")
     order.status = "REPAIRING"
     order.started_at = datetime.now()
+    # 自动派单无候选人时 assigned_to 为空，接单时补登记为实际接单人，便于后续归档权限校验
+    if order.assigned_to is None:
+        order.assigned_to = account.account_id
+        order.assigned_name = account.real_name
     order.operator_id = account.account_id
     order.operator_name = account.real_name
     await write_log(db, "DEVICE", "UPDATE", account, order.id, "DEVICE", {"action": "accept_repair_order", "order_no": order.order_no})
@@ -677,15 +700,18 @@ async def finish_repair_order(order_id: int, body: RepairFinishBody, db: AsyncSe
     if not damage_cause or not repair_detail:
         raise HTTPException(status_code=400, detail="损坏原因与维修情况为必填项")
     now = datetime.now()
+    # 1. 工单归档
     order.status = "COMPLETED"
     order.completed_at = now
     order.damage_cause = damage_cause
     order.repair_detail = repair_detail
     order.operator_id = account.account_id
     order.operator_name = account.real_name
+    # 2. 故障记录闭环
     fault = (
         await db.execute(select(FaultRecord).where(FaultRecord.id == order.fault_id, FaultRecord.is_deleted == 0))
     ).scalar_one_or_none()
+    fault_missing = fault is None
     if fault is not None:
         fault.disposal_status = "REPAIRED"
         fault.recovery_time = now
@@ -693,18 +719,60 @@ async def finish_repair_order(order_id: int, body: RepairFinishBody, db: AsyncSe
         fault.repair_remark = repair_detail
         fault.operator_id = account.account_id
         fault.operator_name = account.real_name
+    # 3. 设备状态恢复：仅当该设备无其他未完结故障工单时才由 FAULT 恢复为 ONLINE
+    #    用带 NOT EXISTS 子查询的原子 UPDATE 规避多工单并发归档竞态
     device = (
         await db.execute(select(Device).where(Device.id == order.device_id, Device.is_deleted == 0))
     ).scalar_one_or_none()
+    device_restored = False
+    device_missing = device is None
     if device is not None:
-        device.status = settings.repair_restore_status
-        device.health_score = settings.repair_restore_health_score
-        device.last_heartbeat_time = now
-        device.operator_id = account.account_id
-        device.operator_name = account.real_name
-    await write_log(db, "DEVICE", "UPDATE", account, order.id, "DEVICE", {"action": "finish_repair_order", "order_no": order.order_no, "restore_status": settings.repair_restore_status})
+        device_restored = await try_restore_device(
+            db,
+            device_id=order.device_id,
+            current_order_id=order.id,
+            operator_id=account.account_id,
+            operator_name=account.real_name,
+            now=now,
+        )
+    # 4. 操作日志（记录恢复结果与边界情况，便于排查脏数据）
+    log_remark = {
+        "action": "finish_repair_order",
+        "order_no": order.order_no,
+        "device_restored": device_restored,
+    }
+    if fault_missing:
+        log_remark["fault_missing"] = True
+    if device_missing:
+        log_remark["device_missing"] = "关联设备已删除，跳过设备状态恢复"
+    elif not device_restored:
+        log_remark["device_kept_fault"] = "设备仍存在其他未完结故障工单，保持故障状态"
+    await write_log(db, "DEVICE", "UPDATE", account, order.id, "DEVICE", log_remark)
+    # 5. 单事务原子提交：工单/故障/设备任一失败整体回滚，杜绝"工单已归档但设备未恢复"脏数据
     await db.commit()
-    return ok(message="工单已完成归档，设备状态已恢复")
+    # 6. 事务提交后异步通知上层轨迹模块（仅当设备真正恢复，避免外部依赖拖垮主事务）
+    if device_restored:
+        try:
+            await notifier.broadcast_all(
+                {
+                    "type": "DEVICE_STATUS_RESTORED",
+                    "device_id": order.device_id,
+                    "device_code": order.device_code,
+                    "old_status": "FAULT",
+                    "new_status": settings.repair_restore_status,
+                    "restored_at": now.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+        except Exception:
+            # 通知失败不影响主流程，仅记录到日志上下文
+            pass
+    if device_missing:
+        msg = "工单已归档，关联设备已删除，跳过设备状态恢复"
+    elif device_restored:
+        msg = "工单已完成归档，设备状态已恢复"
+    else:
+        msg = "工单已归档，设备仍存在其他未完结故障工单，保持故障状态"
+    return ok(message=msg)
 
 
 @router.get("/repair-orders/dispatch-logs")

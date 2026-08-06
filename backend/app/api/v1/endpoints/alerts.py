@@ -186,7 +186,12 @@ class IgnoreBody(BaseModel):
 class ReviewBody(BaseModel):
     false_positive: bool = False
     person_identity: str = "stranger"
+    person_id: int | None = None
+    person_name: str | None = None
     note: str | None = None
+
+
+REVIEW_PERSON_IDENTITIES = ("registered", "stranger")
 
 
 @router.post("/{alert_id}/ignore")
@@ -219,6 +224,26 @@ async def review_alert(
     alert = await load_alert(db, alert_id)
     if alert.alert_status_id != 1:
         raise HTTPException(status_code=400, detail="仅待确认状态的预警可以复核")
+    # 人员身份枚举校验
+    if body.person_identity not in REVIEW_PERSON_IDENTITIES:
+        raise HTTPException(status_code=400, detail="人员身份取值不合法")
+    # 条件必填校验：登记人员必须选具体系统账号；其他身份强制清空，防前端未清空导致脏数据
+    selected_account: SysAccount | None = None
+    if body.person_identity == "registered":
+        if body.person_id is None:
+            raise HTTPException(status_code=400, detail="人员身份为数据库登记人员时，必须选择具体账号")
+        selected_account = (
+            await db.execute(select(SysAccount).where(SysAccount.account_id == body.person_id))
+        ).scalar_one_or_none()
+        if selected_account is None:
+            raise HTTPException(status_code=400, detail="所选账号已被删除，请重新选择")
+        # 冗余存档账号名称，防后续账号被删后归档记录无法展示
+        if not body.person_name:
+            body.person_name = selected_account.real_name or selected_account.login_name or f"账号#{selected_account.account_id}"
+    else:
+        body.person_id = None
+        body.person_name = None
+
     behavior = (
         await db.execute(select(FaAbnormalBehavior).where(FaAbnormalBehavior.behavior_id == alert.behavior_id))
     ).scalar_one()
@@ -239,14 +264,24 @@ async def review_alert(
     behavior.person_identity = body.person_identity
     behavior.reviewed_by = account.account_id
     behavior.reviewed_at = now
+    # 选中登记人员时绑定到该系统账号，驱动异常行为轨迹业务关联
+    if selected_account is not None:
+        behavior.person_id = selected_account.account_id
+    review_lines = [behavior.description or ""]
+    if selected_account is not None:
+        review_lines.append(f"登记人员：{body.person_name}(ID:{selected_account.account_id})")
     if body.note:
-        behavior.description = f"{behavior.description or ''}\n复核备注：{body.note}".strip()[:500]
+        review_lines.append(f"复核备注：{body.note}")
+    behavior.description = "\n".join([s for s in review_lines if s]).strip()[:500]
 
+    # 轨迹联动：归档时若有 track_id，绑定选中账号并标记归档
     if behavior.track_id:
         chain = await db.execute(select(TrackPassChain).where(TrackPassChain.id == behavior.track_id))
         chain = chain.scalar_one_or_none()
         if chain:
             chain.is_archived = 1
+            if selected_account is not None:
+                chain.person_id = selected_account.account_id
 
     await write_log(
         db,
@@ -259,6 +294,8 @@ async def review_alert(
             "alert_id": alert_id,
             "false_positive": body.false_positive,
             "person_identity": body.person_identity,
+            "person_id": body.person_id,
+            "person_name": body.person_name,
             "note": body.note,
         },
     )

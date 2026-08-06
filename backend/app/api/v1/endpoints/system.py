@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.connection import notifier
@@ -21,6 +22,11 @@ def fmt(dt) -> str | None:
     return dt.strftime("%Y-%m-%d %H:%M:%S") if dt else None
 
 
+def _escape_like_keyword(keyword: str) -> str:
+    """对 like 通配符 % _ 做转义，避免恶意/误输入导致全表扫描或结果歧义。"""
+    return keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/accounts")
 async def list_accounts(
     keyword: str | None = Query(default=None),
@@ -31,41 +37,51 @@ async def list_accounts(
     db: AsyncSession = Depends(get_db),
     _: SysAccount = Depends(get_current_account),
 ):
-    stmt = select(SysAccount, SysUserType.type_name).join(SysUserType, SysUserType.type_id == SysAccount.type_id)
-    count_stmt = select(func.count()).select_from(SysAccount)
-    if keyword:
-        like = f"%{keyword}%"
-        cond = or_(SysAccount.login_name.like(like), SysAccount.real_name.like(like), SysAccount.dept.like(like))
-        stmt = stmt.where(cond)
-        count_stmt = count_stmt.where(cond)
-    if type_id is not None:
-        stmt = stmt.where(SysAccount.type_id == type_id)
-        count_stmt = count_stmt.where(SysAccount.type_id == type_id)
-    if status is not None:
-        stmt = stmt.where(SysAccount.status == status)
-        count_stmt = count_stmt.where(SysAccount.status == status)
-    total = (await db.execute(count_stmt)).scalar_one()
-    rows = (await db.execute(stmt.order_by(SysAccount.account_id).offset((page - 1) * size).limit(size))).all()
-    custom_account_ids = set(
-        (await db.execute(select(SysAccountPermission.account_id).distinct())).scalars().all()
-    )
-    items = [
-        {
-            "account_id": row[0].account_id,
-            "login_name": row[0].login_name,
-            "password": row[0].password,
-            "real_name": row[0].real_name,
-            "dept": row[0].dept,
-            "phone": row[0].phone,
-            "type_id": row[0].type_id,
-            "type_name": row[1],
-            "status": row[0].status,
-            "use_custom": 1 if row[0].account_id in custom_account_ids else 0,
-            "last_login_time": fmt(row[0].last_login_time),
-        }
-        for row in rows
-    ]
-    return ok(page_result(items, total, page, size))
+    try:
+        stmt = select(SysAccount, SysUserType.type_name).join(SysUserType, SysUserType.type_id == SysAccount.type_id)
+        count_stmt = select(func.count()).select_from(SysAccount)
+        if keyword is not None:
+            keyword = keyword.strip()
+        if keyword:
+            like = f"%{_escape_like_keyword(keyword)}%"
+            cond = or_(
+                SysAccount.login_name.like(like, escape="\\"),
+                SysAccount.real_name.like(like, escape="\\"),
+                SysAccount.dept.like(like, escape="\\"),
+            )
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
+        if type_id is not None:
+            stmt = stmt.where(SysAccount.type_id == type_id)
+            count_stmt = count_stmt.where(SysAccount.type_id == type_id)
+        if status is not None:
+            stmt = stmt.where(SysAccount.status == status)
+            count_stmt = count_stmt.where(SysAccount.status == status)
+        total = (await db.execute(count_stmt)).scalar_one()
+        rows = (await db.execute(stmt.order_by(SysAccount.account_id).offset((page - 1) * size).limit(size))).all()
+        custom_account_ids = set(
+            (await db.execute(select(SysAccountPermission.account_id).distinct())).scalars().all()
+        )
+        items = [
+            {
+                "account_id": row[0].account_id,
+                "login_name": row[0].login_name,
+                "real_name": row[0].real_name,
+                "dept": row[0].dept,
+                "phone": row[0].phone,
+                "type_id": row[0].type_id,
+                "type_name": row[1],
+                "status": row[0].status,
+                "use_custom": 1 if row[0].account_id in custom_account_ids else 0,
+                "last_login_time": fmt(row[0].last_login_time),
+            }
+            for row in rows
+        ]
+        return ok(page_result(items, total, page, size))
+    except SQLAlchemyError:
+        raise HTTPException(status_code=500, detail="数据库查询异常，请稍后重试") from None
+    except Exception:
+        raise HTTPException(status_code=500, detail="服务器内部错误，请稍后重试") from None
 
 
 @router.get("/accounts/export")

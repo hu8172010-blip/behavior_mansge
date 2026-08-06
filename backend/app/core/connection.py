@@ -42,6 +42,19 @@ class PermissionNotifier:
             except Exception:
                 self._role_sockets.get(type_id, set()).discard(ws)
 
+    async def broadcast_all(self, message: dict) -> None:
+        """向所有在线 WebSocket 连接广播消息（用于设备状态恢复等全局事件通知）。"""
+        seen: set[int] = set()
+        for sockets in self._account_sockets.values():
+            for ws in sockets.copy():
+                if id(ws) in seen:
+                    continue
+                seen.add(id(ws))
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    pass
+
 
 # 全局单例
 notifier = PermissionNotifier()

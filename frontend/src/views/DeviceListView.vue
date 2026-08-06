@@ -364,22 +364,22 @@ function resetFaultFilter() {
         <div v-if="behaviorsLoading" style="padding: 20px; text-align: center">加载中...</div>
         <div v-else-if="!deviceBehaviors.length" style="padding: 20px; text-align: center">暂无行为记录</div>
         <div v-else class="behaviors-table-wrapper">
-          <table class="data-table">
+          <table class="data-table behaviors-table">
             <thead>
               <tr>
-                <th>时间</th>
-                <th>类型</th>
-                <th>级别</th>
-                <th>状态</th>
+                <th style="width: 160px; white-space: nowrap">时间</th>
+                <th style="width: 100px; white-space: nowrap">类型</th>
+                <th style="width: 70px; white-space: nowrap">级别</th>
+                <th style="width: 90px; white-space: nowrap">状态</th>
                 <th>描述</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="b in deviceBehaviors" :key="b.behavior_id">
-                <td>{{ b.detected_at }}</td>
-                <td>{{ b.type_name }}</td>
-                <td>{{ b.level_name }}</td>
-                <td>{{ b.status_name }}</td>
+                <td style="white-space: nowrap">{{ b.detected_at }}</td>
+                <td style="white-space: nowrap">{{ b.type_name }}</td>
+                <td style="white-space: nowrap">{{ b.level_name }}</td>
+                <td style="white-space: nowrap">{{ b.status_name }}</td>
                 <td><small>{{ b.description }}</small></td>
               </tr>
           </tbody>

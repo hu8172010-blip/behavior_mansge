@@ -22,7 +22,6 @@ const statusOptions = [
 const filters = reactive({
   keyword: "",
   status: "",
-  fault_id: "",
   assigned_to: "",
   start_time: "",
   end_time: "",
@@ -63,7 +62,6 @@ async function loadOrders() {
     const result = await api.repairOrders({
       status: filters.status || undefined,
       keyword: filters.keyword || undefined,
-      fault_id: filters.fault_id ? Number(filters.fault_id) : undefined,
       assigned_to: filters.assigned_to ? Number(filters.assigned_to) : undefined,
       assigned_name: !filters.assigned_to && assigneeInput.value.trim() ? assigneeInput.value.trim() : undefined,
       start_time: filters.start_time || undefined,
@@ -97,7 +95,7 @@ function goToPage() {
 }
 
 function resetFilters() {
-  Object.assign(filters, { keyword: "", status: "", fault_id: "", assigned_to: "", start_time: "", end_time: "" });
+  Object.assign(filters, { keyword: "", status: "", assigned_to: "", start_time: "", end_time: "" });
   assigneeInput.value = "";
   search();
 }
@@ -155,7 +153,6 @@ watch(() => settings.filterLabData, () => loadOrders());
           <option value="">全部状态</option>
           <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
-        <input v-model="filters.fault_id" class="filter-input" type="number" min="1" placeholder="故障记录ID" @keyup.enter="search" />
         <input v-model="assigneeInput" type="text" placeholder="输入姓名搜索维修负责人" @keyup.enter="search" style="width: 200px; height: 40px; padding: 0 10px; border: 1px solid #dbe3ed; border-radius: 5px; outline: 0;" />
         <input v-model="filters.start_time" class="filter-input" type="date" title="创建时间起" @change="search" />
         <input v-model="filters.end_time" class="filter-input" type="date" title="创建时间止" @change="search" />

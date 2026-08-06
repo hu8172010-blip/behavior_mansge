@@ -1,13 +1,13 @@
 /**
  * 远端模型推理服务（FastAPI）访问模块。
- * 开发环境通过 Vite 代理 /model → http://192.168.237.123:8000，生产环境走同源/Nginx 中转，
+ * 开发环境通过 Vite 代理 /model → http://192.168.237.123:8010，生产环境走同源/Nginx 中转，
  * 禁止浏览器直接跨域请求模型服务。
  */
 
 const MODEL_BASE = "/model";
 
 export const MODEL_OFFLINE_MSG =
-  "模型推理服务离线，请检查192.168.237.123设备是否开机、8000端口防火墙放行";
+  "模型推理服务离线，请检查192.168.237.123设备是否开机、8010端口防火墙放行";
 
 export class ModelApiError extends Error {
   status: number;

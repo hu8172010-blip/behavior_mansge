@@ -223,8 +223,8 @@ async function publishRecord() {
       result: result.value,
     });
     isPublished.value = true;
-    publishedRecordId.value = (data as any).record_id ?? null;
-    const c = (data as any).counts;
+    publishedRecordId.value = data.record_id ?? null;
+    const c = data.counts;
     if (c) {
       const hint = `成功发布到业务！记录 ID：${data.record_id}。\n生成：异常行为 ${c.behavior_count} 条、预警 ${c.alert_count} 条、工单 ${c.work_order_count} 条。\n\n请将顶部导航栏【过滤模拟数据】开关关闭，即可在业务列表（异常行为记录 / 告警待办 / 轨迹查询）中看到带“模拟”标签的数据。`;
       message.value = hint;
@@ -237,8 +237,10 @@ async function publishRecord() {
       messageType.value = "success";
     }
   } catch (e: any) {
-    message.value = "发布失败：" + (e?.message || "未知错误");
+    message.value = "发布失败，请检查网络或联系管理员：" + (e?.message || "未知错误");
     messageType.value = "error";
+    isPublished.value = false;
+    publishedRecordId.value = null;
   } finally {
     analyzing.value = false;
   }
@@ -424,11 +426,11 @@ async function publishReidRecord() {
       video_job_id_b: reidJobB.value.id || "",
       result: reidResult.value,
     });
-    const c = (data as any).counts;
-    reidMessage.value = `成功发布到业务！记录 ID：${(data as any).record_id}。\n生成：异常行为 ${c.behavior_count} 条、预警 ${c.alert_count} 条。\n请关闭“过滤模拟数据”后在异常行为/告警/轨迹列表中查看。`;
+    const c = data.counts;
+    reidMessage.value = `成功发布到业务！记录 ID：${data.record_id}。\n生成：异常行为 ${c.behavior_count} 条、预警 ${c.alert_count} 条。\n请关闭“过滤模拟数据”后在异常行为/告警/轨迹列表中查看。`;
     reidMessageType.value = "success";
   } catch (e: any) {
-    reidMessage.value = "发布失败：" + (e?.message || "未知错误");
+    reidMessage.value = "发布失败，请检查网络或联系管理员：" + (e?.message || "未知错误");
     reidMessageType.value = "error";
   } finally {
     reidPublishing.value = false;

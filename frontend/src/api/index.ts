@@ -388,6 +388,7 @@ export interface LabJobStatus {
 }
 
 export interface LabPublishResult {
+  record_id: number;
   published: boolean;
   counts: {
     behavior_count: number;
@@ -592,6 +593,17 @@ export const api = {
   },
   labJobGet: (job_id: string) => http.get<LabJobStatus>(`/lab/jobs/${job_id}`),
   labJobPublish: (job_id: string) => http.post<LabPublishResult>(`/lab/jobs/${job_id}/publish`),
+  labPublishResult: (body: {
+    device_ids: number[];
+    record_name?: string;
+    video_filename?: string;
+    video_filename_b?: string;
+    video_url?: string;
+    video_url_b?: string;
+    video_job_id?: string;
+    video_job_id_b?: string;
+    result: any;
+  }) => http.post<LabPublishResult>("/lab/publish", body),
   labClearSandbox: () => http.post<{ cleared: boolean }>("/lab/clear-sandbox"),
   inferenceJob: (video: File, device_id: number, calibration: string) => {
     const form = new FormData();

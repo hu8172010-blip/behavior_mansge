@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     jwt_secret: str = "dev-secret-key-change-in-production"
     jwt_expire_hours: int = 24
-    anomaly_tracker_url: str = "http://192.168.237.123:8000"
+    anomaly_tracker_url: str = "http://192.168.237.123:8010"
     repair_restore_status: str = "ONLINE"
     repair_restore_health_score: int = 100
     backup_dir: str = "data_backups"

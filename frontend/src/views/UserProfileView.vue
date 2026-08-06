@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { api, type PersonItem } from "../api";
+import { useSettingsStore } from "../stores/settings";
+const settings = useSettingsStore();
 
 const keyword = ref("");
 const isFocused = ref<number | undefined>(undefined);
@@ -71,6 +73,14 @@ async function toggleFocus(item: PersonItem) {
 }
 
 onMounted(loadPersons);
+watch(() => settings.filterLabData, () => loadPersons());
+
+function resetPersonFilter() {
+  keyword.value = "";
+  isFocused.value = undefined;
+  page.value = 1;
+  loadPersons();
+}
 </script>
 
 <template>
@@ -91,6 +101,7 @@ onMounted(loadPersons);
           <option :value="0">仅普通人员</option>
         </select>
         <button class="primary" @click="search">查询</button>
+        <button @click="resetPersonFilter">重置</button>
         <button :disabled="exporting" @click="exportData">{{ exporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">

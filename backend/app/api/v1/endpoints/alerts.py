@@ -113,7 +113,8 @@ async def list_alerts(
         stmt = stmt.where(FaBehaviorAlert.is_lab == 0)
     count_stmt = select(func.count()).select_from(FaBehaviorAlert).join(
         FaAbnormalBehavior, FaAbnormalBehavior.behavior_id == FaBehaviorAlert.behavior_id
-    ).join(DmBehaviorType, DmBehaviorType.behavior_type_id == FaAbnormalBehavior.behavior_type_id)
+    ).join(DmBehaviorType, DmBehaviorType.behavior_type_id == FaAbnormalBehavior.behavior_type_id) \
+        .outerjoin(Device, Device.id == FaAbnormalBehavior.camera_id)
     if not include_lab:
         count_stmt = count_stmt.where(FaBehaviorAlert.is_lab == 0)
     if status_id is not None:
@@ -124,7 +125,12 @@ async def list_alerts(
         count_stmt = count_stmt.where(FaBehaviorAlert.severity_level_id == severity_id)
     if keyword:
         like = f"%{keyword}%"
-        cond = or_(DmBehaviorType.type_name.like(like), FaAbnormalBehavior.description.like(like))
+        cond = or_(
+            DmBehaviorType.type_name.like(like),
+            FaAbnormalBehavior.description.like(like),
+            Device.device_name.like(like),
+            Device.region_name.like(like),
+        )
         stmt = stmt.where(cond)
         count_stmt = count_stmt.where(cond)
     total = (await db.execute(count_stmt)).scalar_one()

@@ -32,7 +32,7 @@ async def enums(db: AsyncSession = Depends(get_db)):
         (
             await db.execute(
                 select(SysAccount.account_id, SysAccount.real_name, SysAccount.type_id).where(
-                    SysAccount.status == 1, SysAccount.type_id.in_([2, 3])
+                    SysAccount.status == 1, SysAccount.type_id != 1
                 )
             )
         )

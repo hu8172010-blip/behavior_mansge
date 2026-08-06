@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useSettingsStore } from "../stores/settings";
+const settings = useSettingsStore();
 import { api, type DeviceItem, type FaultItem } from "../api";
-import { formatBehaviorDesc } from "../utils/behaviorDisplay";
 import { useAuthStore } from "../stores/auth";
 
 const route = useRoute();
@@ -37,8 +38,10 @@ const devKeyword = ref("");
 const devPage = ref(1);
 const devSize = 10;
 const devTotal = ref(0);
+const devJump = ref<number | null>(null);
 const devices = ref<DeviceItem[]>([]);
 const devLoading = ref(false);
+const devExporting = ref(false);
 const showBehaviors = ref(false);
 const currentDevice = ref<DeviceItem | null>(null);
 const deviceBehaviors = ref<any[]>([]);
@@ -48,8 +51,10 @@ const faultStatus = ref("");
 const faultPage = ref(1);
 const faultSize = 10;
 const faultTotal = ref(0);
+const faultJump = ref<number | null>(null);
 const faults = ref<FaultItem[]>([]);
 const faultLoading = ref(false);
+const faultExporting = ref(false);
 
 const showEditor = ref(false);
 const editingId = ref<number | null>(null);
@@ -116,6 +121,21 @@ function searchDevices() {
   loadDevices();
 }
 
+async function exportDevices() {
+  devExporting.value = true;
+  try {
+    await api.exportDevices({
+      status: devStatus.value || undefined,
+      device_type: devType.value || undefined,
+      keyword: devKeyword.value || undefined,
+    });
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    devExporting.value = false;
+  }
+}
+
 async function viewBehaviors(item: DeviceItem) {
   currentDevice.value = item;
   showBehaviors.value = true;
@@ -133,6 +153,41 @@ async function viewBehaviors(item: DeviceItem) {
 
 function searchFaults() {
   faultPage.value = 1;
+  loadFaults();
+}
+
+async function exportFaults() {
+  faultExporting.value = true;
+  try {
+    await api.exportFaults({
+      disposal_status: faultStatus.value || undefined,
+    });
+  } catch (error: any) {
+    errorText.value = error.message;
+  } finally {
+    faultExporting.value = false;
+  }
+}
+
+function goToDevPage() {
+  const maxPage = Math.max(1, Math.ceil(devTotal.value / devSize));
+  let p = Number(devJump.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  if (p === devPage.value) return;
+  devPage.value = p;
+  devJump.value = null;
+  loadDevices();
+}
+
+function goToFaultPage() {
+  const maxPage = Math.max(1, Math.ceil(faultTotal.value / faultSize));
+  let p = Number(faultJump.value);
+  if (!Number.isFinite(p) || p < 1) p = 1;
+  if (p > maxPage) p = maxPage;
+  if (p === faultPage.value) return;
+  faultPage.value = p;
+  faultJump.value = null;
   loadFaults();
 }
 
@@ -217,6 +272,26 @@ onMounted(() => {
   loadDevices();
   loadFaults();
 });
+watch(() => settings.filterLabData, () => {
+  loadDevices();
+  loadFaults();
+});
+
+function resetDeviceFilter() {
+  devKeyword.value = "";
+  devStatus.value = "";
+  devType.value = "";
+  devPage.value = 1;
+  devJump.value = null;
+  loadDevices();
+}
+
+function resetFaultFilter() {
+  faultStatus.value = "";
+  faultPage.value = 1;
+  faultJump.value = null;
+  loadFaults();
+}
 </script>
 
 <template>
@@ -244,7 +319,9 @@ onMounted(() => {
           <option v-for="item in typeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <button class="primary" @click="searchDevices">查询</button>
-        <button v-if="auth.hasPermission('device:create')" class="btn-sm btn-confirm" @click="openCreate">+ 新增设备</button>
+        <button @click="resetDeviceFilter">重置</button>
+        <button :disabled="devExporting" @click="exportDevices">{{ devExporting ? "导出中..." : "导出 CSV" }}</button>
+        <button v-if="auth.hasPermission('device:create')" class="primary" @click="openCreate">+ 新增设备</button>
       </div>
       <div class="table full">
         <div class="table-head"><span>设备编号</span><span>名称 / 位置</span><span>类型</span><span>状态</span><span>健康分</span><span>最近心跳</span><span>IP</span><span>操作</span></div>
@@ -264,11 +341,15 @@ onMounted(() => {
           </span>
         </div>
       </div>
-      <div class="toolbar" style="margin-top: 12px">
+      <div class="pager">
         <span>共 {{ devTotal }} 条</span>
         <button :disabled="devPage <= 1" @click="devPage--; loadDevices()">上一页</button>
-        <span>第 {{ devPage }} 页</span>
+        <span>第 {{ devPage }} 页 / 共 {{ Math.max(1, Math.ceil(devTotal / devSize)) }} 页</span>
         <button :disabled="devPage * devSize >= devTotal" @click="devPage++; loadDevices()">下一页</button>
+        <span style="margin-left: 8px">跳转到</span>
+        <input v-model.number="devJump" type="number" min="1" :max="Math.max(1, Math.ceil(devTotal / devSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goToDevPage" />
+        <span>页</span>
+        <button @click="goToDevPage" :disabled="!devJump">GO</button>
       </div>
     </div>
 
@@ -279,6 +360,8 @@ onMounted(() => {
           <option v-for="item in faultStatusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
         </select>
         <button class="primary" @click="searchFaults">查询</button>
+        <button @click="resetFaultFilter">重置</button>
+        <button :disabled="faultExporting" @click="exportFaults">{{ faultExporting ? "导出中..." : "导出 CSV" }}</button>
       </div>
       <div class="table full">
         <div class="table-head"><span>发生时间</span><span>设备</span><span>故障类型</span><span>级别</span><span>描述</span><span>处置状态</span><span>操作</span></div>
@@ -294,73 +377,202 @@ onMounted(() => {
           <span><button v-if="item.disposal_status !== 'CLOSED' && auth.hasPermission('device:update')" class="btn-sm btn-ignore" :disabled="submitting" @click="closeFault(item)">关闭故障</button><span v-else>—</span></span>
         </div>
       </div>
-      <div class="toolbar" style="margin-top: 12px">
+      <div class="pager">
         <span>共 {{ faultTotal }} 条</span>
         <button :disabled="faultPage <= 1" @click="faultPage--; loadFaults()">上一页</button>
-        <span>第 {{ faultPage }} 页</span>
+        <span>第 {{ faultPage }} 页 / 共 {{ Math.max(1, Math.ceil(faultTotal / faultSize)) }} 页</span>
         <button :disabled="faultPage * faultSize >= faultTotal" @click="faultPage++; loadFaults()">下一页</button>
+        <span style="margin-left: 8px">跳转到</span>
+        <input v-model.number="faultJump" type="number" min="1" :max="Math.max(1, Math.ceil(faultTotal / faultSize))" style="width: 64px; height: 32px; line-height: 30px; padding: 0; text-align: center; border: 1px solid #dbe3ed; border-radius: 4px; flex-shrink: 0;" @keyup.enter="goToFaultPage" />
+        <span>页</span>
+        <button @click="goToFaultPage" :disabled="!faultJump">GO</button>
       </div>
     </div>
 
     <div v-if="showBehaviors" class="modal-mask" @click.self="showBehaviors = false">
-      <div class="modal" style="max-width: 720px; width: 90%">
+      <div class="modal wide">
         <button class="close" @click="showBehaviors = false">×</button>
         <h2>设备行为记录 - {{ currentDevice?.device_name }}</h2>
         <div v-if="behaviorsLoading" style="padding: 20px; text-align: center">加载中...</div>
         <div v-else-if="!deviceBehaviors.length" style="padding: 20px; text-align: center">暂无行为记录</div>
-        <table v-else class="data-table">
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>类型</th>
-              <th>级别</th>
-              <th>状态</th>
-              <th>描述</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="b in deviceBehaviors" :key="b.behavior_id">
-              <td>{{ b.detected_at }}</td>
-              <td>{{ b.type_name }}</td>
-              <td>{{ b.level_name }}</td>
-              <td>{{ b.status_name }}</td>
-              <td><small>{{ formatBehaviorDesc(b.description, b.type_name) || "—" }}</small></td>
-            </tr>
+        <div v-else class="behaviors-table-wrapper">
+          <table class="data-table behaviors-table">
+            <thead>
+              <tr>
+                <th style="width: 110px">时间</th>
+                <th style="width: 80px; white-space: nowrap">类型</th>
+                <th style="width: 40px; white-space: nowrap">级别</th>
+                <th style="width: 80px; white-space: nowrap">状态</th>
+                <th>描述</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="b in deviceBehaviors" :key="b.behavior_id">
+                <td>{{ b.detected_at }}</td>
+                <td style="white-space: nowrap">{{ b.type_name }}</td>
+                <td style="white-space: nowrap">{{ b.level_name }}</td>
+                <td style="white-space: nowrap">{{ b.status_name }}</td>
+                <td><small>{{ b.description }}</small></td>
+              </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 
     <div v-if="showEditor" class="modal-mask" @click.self="showEditor = false">
-      <div class="modal">
+      <div class="modal wide">
         <button class="close" @click="showEditor = false">×</button>
         <h2>{{ editingId === null ? "新增设备" : "编辑设备 " + form.device_code }}</h2>
-        <label>设备编号</label>
-        <input v-model="form.device_code" :disabled="editingId !== null" placeholder="如 CAM-025" />
-        <label>设备名称</label>
-        <input v-model="form.device_name" placeholder="如 周界西段摄像头" />
-        <label v-if="editingId === null">设备类型</label>
-        <select v-if="editingId === null" v-model="form.device_type" class="role-select">
-          <option v-for="item in typeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-        <label v-else>设备状态</label>
-        <select v-if="editingId !== null" v-model="form.status" class="role-select">
-          <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-        <label>安装位置</label>
-        <input v-model="form.location_text" placeholder="如 园区西侧围墙" />
-        <label>所属区域</label>
-        <input v-model="form.region_name" placeholder="如 周界" />
-        <label>IP 地址</label>
-        <input v-model="form.ip_address" placeholder="如 192.168.10.91" />
-        <label>厂商</label>
-        <input v-model="form.manufacturer" placeholder="如 海康威视" />
-        <label>型号</label>
-        <input v-model="form.model" />
-        <label>备注</label>
-        <input v-model="form.remark" />
-        <button class="primary" :disabled="submitting" @click="submitForm">{{ editingId === null ? "确认新增" : "保存修改" }}</button>
+        <div class="form-grid">
+          <div class="form-cell">
+            <label>设备编号</label>
+            <input v-model="form.device_code" :disabled="editingId !== null" placeholder="如 CAM-025" />
+          </div>
+          <div class="form-cell">
+            <label>设备名称</label>
+            <input v-model="form.device_name" placeholder="如 周界西段摄像头" />
+          </div>
+          <div class="form-cell">
+            <label v-if="editingId === null">设备类型</label>
+            <label v-else>设备状态</label>
+            <select v-if="editingId === null" v-model="form.device_type" class="role-select">
+              <option v-for="item in typeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+            <select v-else v-model="form.status" class="role-select">
+              <option v-for="item in statusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+          <div class="form-cell">
+            <label>所属区域</label>
+            <input v-model="form.region_name" placeholder="如 周界" />
+          </div>
+          <div class="form-cell">
+            <label>安装位置</label>
+            <input v-model="form.location_text" placeholder="如 园区西侧围墙" />
+          </div>
+          <div class="form-cell">
+            <label>IP 地址</label>
+            <input v-model="form.ip_address" placeholder="如 192.168.10.91" />
+          </div>
+          <div class="form-cell">
+            <label>厂商</label>
+            <input v-model="form.manufacturer" placeholder="如 海康威视" />
+          </div>
+          <div class="form-cell">
+            <label>型号</label>
+            <input v-model="form.model" />
+          </div>
+          <div class="form-cell full">
+            <label>备注</label>
+            <input v-model="form.remark" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button @click="showEditor = false">取消</button>
+          <button class="primary" :disabled="submitting" @click="submitForm">{{ editingId === null ? "确认新增" : "保存修改" }}</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* "+ 新增设备" 按钮直接用 .primary（与"查询"按钮完全一致），无需自定义样式 */
+
+/* 设备编辑/新增弹窗：宽屏 + 两列布局，避免 11 个字段挤在 450px 里 */
+.modal.wide h2 + .behaviors-table-wrapper {
+  margin-top: 8px;
+}
+.behaviors-table-wrapper {
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid #eef2f8;
+  border-radius: 4px;
+}
+.behaviors-table-wrapper .data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+/* 行为记录表加竖向网格线，表头与单元格清晰分界 */
+.behaviors-table-wrapper .data-table th,
+.behaviors-table-wrapper .data-table td {
+  border-left: 1px solid #dbe3ed;
+  border-right: 1px solid #dbe3ed;
+  border-bottom: 1px solid #dbe3ed;
+}
+.behaviors-table-wrapper .data-table th:first-child,
+.behaviors-table-wrapper .data-table td:first-child {
+  border-left: 0;
+}
+.behaviors-table-wrapper .data-table th:last-child,
+.behaviors-table-wrapper .data-table td:last-child {
+  border-right: 0;
+}
+.behaviors-table-wrapper .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.modal.wide {
+  width: 640px;
+  max-width: 92%;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin: 16px 0;
+}
+.form-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.form-cell.full {
+  grid-column: 1 / -1;
+}
+.form-cell label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.form-cell input,
+.form-cell select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dbe3ed;
+  border-radius: 5px;
+  font-size: 13px;
+  color: #35465e;
+  box-sizing: border-box;
+  outline: 0;
+}
+.form-cell input:focus,
+.form-cell select:focus {
+  border-color: #3788e8;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #eef2f8;
+}
+.form-actions .primary {
+  height: 36px;
+  padding: 0 18px;
+  font-size: 13px;
+  color: #fff;
+  background: #3788e8;
+  border-radius: 5px;
+}
+.form-actions button:not(.primary) {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  border: 1px solid #dbe3ed;
+  border-radius: 5px;
+  background: #fff;
+  color: #65748a;
+}
+</style>

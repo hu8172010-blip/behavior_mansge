@@ -48,18 +48,6 @@ export interface PageData<T> {
 export interface AlertItem {
   alert_id: number;
   behavior_id: number;
-  lab_record_id: number | null;
-  camera_a_id: number | null;
-  camera_b_id: number | null;
-  is_dual_video: number;
-  video_path: string | null;
-  video_path_b: string | null;
-  video_job_id: string | null;
-  video_job_id_b: string | null;
-  false_positive: number | null;
-  person_identity: string | null;
-  reviewed_by: number | null;
-  reviewed_at: string | null;
   alert_time: string;
   alert_status_id: number;
   status_name: string;
@@ -320,6 +308,7 @@ export interface LogItem {
 export interface AccountItem {
   account_id: number;
   login_name: string;
+  password?: string;
   real_name: string;
   dept: string | null;
   phone: string | null;
@@ -370,8 +359,35 @@ export interface PersonDetail extends PersonItem {
   }[];
 }
 
-export interface LabPublishResponse {
-  record_id: number;
+export interface AnalyzeResult {
+  result: {
+    events: any[];
+    tracks: any[];
+    summary: any;
+  };
+  record_id: number | null;
+  counts?: {
+    behavior_count: number;
+    alert_count: number;
+    work_order_count: number;
+  };
+}
+
+export interface LabJobCreateResult {
+  job_id: string;
+  record_id: number | null;
+}
+
+export interface LabJobStatus {
+  job_id: string;
+  status: string;
+  progress: number;
+  result: any;
+  error: string | null;
+  published: boolean;
+}
+
+export interface LabPublishResult {
   published: boolean;
   counts: {
     behavior_count: number;
@@ -447,10 +463,12 @@ export const api = {
     http.get<PageData<AlertItem>>("/alerts", { ...params, ...getLabIncludeParam() }),
   confirmAlert: (alertId: number) => http.post(`/alerts/${alertId}/confirm`),
   ignoreAlert: (alertId: number, note?: string) => http.post(`/alerts/${alertId}/ignore`, { note }),
-  reviewAlert: (alertId: number, body: { false_positive: boolean; person_identity: string; note?: string }) =>
-    http.post(`/alerts/${alertId}/review`, body),
-  workOrders: (params: { status_id?: number; page: number; size: number }) =>
-    http.get<PageData<WorkOrderItem>>("/workorders", { ...params, ...getLabIncludeParam() }),
+  workOrders: (params: {
+    status_id?: number; severity_id?: number; type_id?: number;
+    assignee_id?: number; assignee_name?: string; keyword?: string;
+    start_time?: string; end_time?: string;
+    page: number; size: number;
+  }) => http.get<PageData<WorkOrderItem>>("/workorders", { ...params, ...getLabIncludeParam() }),
   workOrderDetail: (id: number) => http.get<WorkOrderDetail>(`/workorders/${id}`),
   createWorkOrder: (alert_id: number, assigned_to: number) => http.post("/workorders", { alert_id, assigned_to }),
   handleWorkOrder: (id: number, handle_result: string) => http.put(`/workorders/${id}/handle`, { handle_result }),
@@ -472,10 +490,14 @@ export const api = {
   trackDetail: (chainId: number) => http.get<TrackDetail>(`/tracks/${chainId}`),
   devices: (params: { status?: string; device_type?: string; keyword?: string; page: number; size: number }) =>
     http.get<PageData<DeviceItem>>("/devices", params),
+  exportDevices: (params: { status?: string; device_type?: string; keyword?: string }) =>
+    http.download("/devices/export", params, "devices.csv"),
   createDevice: (body: Partial<DeviceItem> & { device_code: string; device_name: string }) => http.post("/devices", body),
   updateDevice: (id: number, body: Partial<DeviceItem>) => http.put(`/devices/${id}`, body),
   faults: (params: { device_id?: number; disposal_status?: string; page: number; size: number }) =>
     http.get<PageData<FaultItem>>("/devices/faults/list", params),
+  exportFaults: (params: { device_id?: number; disposal_status?: string }) =>
+    http.download("/devices/faults/export", params, "faults.csv"),
   closeFault: (id: number) => http.put(`/devices/faults/${id}/close`),
   simulateFault: (id: number, body: { fault_type?: string; fault_level?: string; fault_desc?: string }) =>
     http.post<SimulateFaultResult>(`/devices/${id}/simulate-fault`, body),
@@ -484,12 +506,23 @@ export const api = {
     keyword?: string;
     fault_id?: number;
     assigned_to?: number;
+    assigned_name?: string;
     start_time?: string;
     end_time?: string;
     only_mine?: boolean;
     page: number;
     size: number;
   }) => http.get<PageData<RepairOrderItem>>("/devices/repair-orders", { ...params, only_mine: params.only_mine ? "true" : undefined }),
+  exportRepairOrders: (params: {
+    status?: string;
+    keyword?: string;
+    fault_id?: number;
+    assigned_to?: number;
+    assigned_name?: string;
+    start_time?: string;
+    end_time?: string;
+    only_mine?: boolean;
+  }) => http.download("/devices/repair-orders/export", { ...params, only_mine: params.only_mine ? "true" : undefined }, "repair_orders.csv"),
   repairOrderDetail: (id: number) => http.get<RepairOrderDetail>(`/devices/repair-orders/${id}`),
   repairCandidates: () => http.get<RepairCandidateItem[]>("/devices/repair-candidates"),
   acceptRepairOrder: (id: number) => http.post(`/devices/repair-orders/${id}/accept`),
@@ -508,9 +541,13 @@ export const api = {
     http.download("/logs/export", params, "operation_logs.csv"),
   accounts: (params: { keyword?: string; type_id?: number; status?: number; page: number; size: number }) =>
     http.get<PageData<AccountItem>>("/system/accounts", params),
+  exportAccounts: (params: { keyword?: string; type_id?: number; status?: number }) =>
+    http.download("/system/accounts/export", params, "accounts.csv"),
   createAccount: (body: { login_name: string; password: string; real_name: string; dept?: string; phone?: string; type_id: number }) =>
     http.post("/system/accounts", body),
   toggleAccountStatus: (accountId: number, status: number) => http.put(`/system/accounts/${accountId}/status`, { status }),
+  changeAccountPassword: (accountId: number, body: { old_password?: string; new_password: string }) =>
+    http.put<void>(`/system/accounts/${accountId}/password`, body),
   accountPermissions: (accountId: number) => http.get<AccountPermInfo>(`/system/accounts/${accountId}/permissions`),
   saveAccountPermissions: (accountId: number, body: { use_custom: number; perm_ids: number[] }) =>
     http.put<void>(`/system/accounts/${accountId}/permissions`, body),
@@ -528,20 +565,39 @@ export const api = {
     http.download("/tracks/export", params, "track_chains.csv"),
   exportAlerts: (params: { status_id?: number; severity_id?: number; keyword?: string }) =>
     http.download("/alerts/export", params, "behavior_alerts.csv"),
-  labPublishResult: (body: {
-    device_ids: number[];
-    record_name?: string;
-    video_filename?: string;
-    video_filename_b?: string;
-    video_url?: string;
-    video_url_b?: string;
-    video_job_id?: string;
-    video_job_id_b?: string;
-    result: any;
-  }) => http.post<LabPublishResponse>("/lab/publish", body),
+  exportWorkOrders: (params: {
+    status_id?: number; severity_id?: number; type_id?: number;
+    assignee_id?: number; assignee_name?: string; keyword?: string;
+    start_time?: string; end_time?: string;
+  }) => http.download("/workorders/export", { ...params, ...getLabIncludeParam() }, "work_orders.csv"),
+  labAnalyze: (video: File, device_id: number, calibration: string, mode: "temp" | "persist", record_name?: string) => {
+    const form = new FormData();
+    form.append("video", video);
+    form.append("device_id", String(device_id));
+    form.append("calibration", calibration);
+    form.append("mode", mode);
+    if (record_name) form.append("record_name", record_name);
+    return http.upload<AnalyzeResult>("/lab/analyze", form);
+  },
+  labJobCreate: (video: File, device_id: number, calibration: string, mode: "temp" | "persist" = "temp", record_name?: string) => {
+    const form = new FormData();
+    form.append("video", video);
+    form.append("device_id", String(device_id));
+    form.append("calibration", calibration);
+    form.append("mode", mode);
+    if (record_name) form.append("record_name", record_name);
+    return http.upload<LabJobCreateResult>("/lab/jobs", form);
+  },
+  labJobGet: (job_id: string) => http.get<LabJobStatus>(`/lab/jobs/${job_id}`),
+  labJobPublish: (job_id: string) => http.post<LabPublishResult>(`/lab/jobs/${job_id}/publish`),
   labClearSandbox: () => http.post<{ cleared: boolean }>("/lab/clear-sandbox"),
-  verifyVideo: (jobId: string) =>
-    http.get<{ exists: boolean; reason?: string; message: string; video_url: string | null }>(`/lab/verify-video/${jobId}`),
+  inferenceJob: (video: File, device_id: number, calibration: string) => {
+    const form = new FormData();
+    form.append("video", video);
+    form.append("device_id", String(device_id));
+    form.append("calibration", calibration);
+    return http.upload<{ behavior_count: number; alert_count: number; work_order_count: number }>("/inference/jobs", form);
+  },
   labRecords: (params: { page: number; size: number }) => http.get<PageData<LabRecordItem>>("/lab/records", params),
   labRecordDetail: (id: number) => http.get<LabRecordDetail>(`/lab/records/${id}`),
   labRecordPublish: (id: number) => http.post<{ published: boolean }>(`/lab/records/${id}/publish`),

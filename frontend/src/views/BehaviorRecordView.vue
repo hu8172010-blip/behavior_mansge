@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useSettingsStore } from "../stores/settings";
+const settings = useSettingsStore();
 import { api, type BehaviorItem, type MetaEnums } from "../api";
 import TrackDetailModal from "../components/TrackDetailModal.vue";
 import PersonDetailModal from "../components/PersonDetailModal.vue";
@@ -81,6 +83,9 @@ function resetFilter() {
   page.value = 1;
   loadData();
 }
+
+// 顶部"过滤模拟数据"开关切换时自动刷新
+watch(() => settings.filterLabData, () => loadData());
 
 async function exportData() {
   exporting.value = true;

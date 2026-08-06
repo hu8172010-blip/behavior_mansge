@@ -1,4 +1,8 @@
+from datetime import datetime
+from io import StringIO
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,6 +53,7 @@ async def list_accounts(
         {
             "account_id": row[0].account_id,
             "login_name": row[0].login_name,
+            "password": row[0].password,
             "real_name": row[0].real_name,
             "dept": row[0].dept,
             "phone": row[0].phone,
@@ -61,6 +66,54 @@ async def list_accounts(
         for row in rows
     ]
     return ok(page_result(items, total, page, size))
+
+
+@router.get("/accounts/export")
+async def export_accounts(
+    keyword: str | None = Query(default=None),
+    type_id: int | None = Query(default=None),
+    status: int | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: SysAccount = Depends(get_current_account),
+):
+    import csv
+
+    stmt = select(SysAccount, SysUserType.type_name).join(SysUserType, SysUserType.type_id == SysAccount.type_id)
+    if keyword:
+        like = f"%{keyword}%"
+        cond = or_(SysAccount.login_name.like(like), SysAccount.real_name.like(like), SysAccount.dept.like(like))
+        stmt = stmt.where(cond)
+    if type_id is not None:
+        stmt = stmt.where(SysAccount.type_id == type_id)
+    if status is not None:
+        stmt = stmt.where(SysAccount.status == status)
+    rows = (await db.execute(stmt.order_by(SysAccount.account_id).limit(5000))).all()
+
+    buffer = StringIO()
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["账号ID", "登录名", "密码", "姓名", "部门", "电话", "角色", "状态", "最近登录"])
+    for row in rows:
+        acc = row[0]
+        writer.writerow([
+            acc.account_id,
+            acc.login_name,
+            acc.password,
+            acc.real_name,
+            acc.dept or "",
+            acc.phone or "",
+            row[1] or "",
+            "启用" if acc.status == 1 else "停用",
+            fmt(acc.last_login_time) or "",
+        ])
+    buffer.seek(0)
+    filename = f"accounts_{datetime.now().strftime('%Y%m%d%H%M%S')}.csv"
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 class AccountBody(BaseModel):
@@ -102,6 +155,30 @@ async def create_account(body: AccountBody, db: AsyncSession = Depends(get_db), 
 
 class StatusBody(BaseModel):
     status: int
+
+
+@router.put("/accounts/{account_id}/password")
+async def change_account_password(account_id: int, body: dict, db: AsyncSession = Depends(get_db), account: SysAccount = Depends(get_current_account)):
+    """修改账号密码（超管可改任意账号；普通用户只能改自己，且需传 old_password）"""
+    new_password = (body.get("new_password") or "").strip()
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="新密码至少 6 个字符")
+    target = (
+        await db.execute(select(SysAccount).where(SysAccount.account_id == account_id))
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    is_super = account.type_id == 1
+    if not is_super and account_id != account.account_id:
+        raise HTTPException(status_code=403, detail="无权限修改其他账号的密码")
+    if not is_super:
+        old_password = (body.get("old_password") or "")
+        if old_password != target.password:
+            raise HTTPException(status_code=400, detail="原密码错误")
+    target.password = new_password
+    await write_log(db, "SYSTEM", "UPDATE", account, account_id, "USER", {"action": "change_password"})
+    await db.commit()
+    return ok(message="密码已修改")
 
 
 @router.put("/accounts/{account_id}/status")

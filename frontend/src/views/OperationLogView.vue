@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { api, type LogItem } from "../api";
+import { useSettingsStore } from "../stores/settings";
+const settings = useSettingsStore();
 import { useAuthStore } from "../stores/auth";
 
 const auth = useAuthStore();
@@ -85,6 +87,17 @@ async function exportCsv() {
 }
 
 onMounted(loadLogs);
+watch(() => settings.filterLabData, () => loadLogs());
+
+function resetLogFilter() {
+  moduleCode.value = "";
+  operationType.value = "";
+  keyword.value = "";
+  startTime.value = "";
+  endTime.value = "";
+  page.value = 1;
+  loadLogs();
+}
 </script>
 
 <template>
@@ -113,6 +126,7 @@ onMounted(loadLogs);
         <input v-model="startTime" type="datetime-local" style="max-width:190px" />
         <input v-model="endTime" type="datetime-local" style="max-width:190px" />
         <button class="primary" @click="search">查询</button>
+        <button @click="resetLogFilter">重置</button>
       </div>
       <div class="table full">
         <div class="table-head"><span>操作时间</span><span>模块</span><span>操作类型</span><span>操作人</span><span>对象</span><span>操作详情</span></div>

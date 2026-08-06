@@ -367,16 +367,16 @@ function resetFaultFilter() {
           <table class="data-table behaviors-table">
             <thead>
               <tr>
-                <th style="width: 130px; white-space: nowrap">时间</th>
+                <th style="width: 85px">时间</th>
                 <th style="width: 80px; white-space: nowrap">类型</th>
-                <th style="width: 60px; white-space: nowrap">级别</th>
+                <th style="width: 40px; white-space: nowrap">级别</th>
                 <th style="width: 80px; white-space: nowrap">状态</th>
                 <th>描述</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="b in deviceBehaviors" :key="b.behavior_id">
-                <td style="white-space: nowrap">{{ b.detected_at }}</td>
+                <td>{{ b.detected_at }}</td>
                 <td style="white-space: nowrap">{{ b.type_name }}</td>
                 <td style="white-space: nowrap">{{ b.level_name }}</td>
                 <td style="white-space: nowrap">{{ b.status_name }}</td>

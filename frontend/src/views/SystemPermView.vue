@@ -100,8 +100,8 @@ onMounted(async () => {
         <template v-if="currentRole">
           <p v-if="currentRole.is_super" style="color:#93a0b2">超级管理员默认放行全部权限，不读取也不保存权限配置。</p>
           <template v-else>
-            <details v-for="(group, idx) in menuGroups" :key="group.menu.perm_id" class="perm-group" :open="idx === 0 ? true : false">
-              <summary class="perm-group-head">
+            <div v-for="group in menuGroups" :key="group.menu.perm_id" class="perm-group">
+              <div class="perm-group-head">
                 <label><input
                   type="checkbox"
                   :checked="checked.has(group.menu.perm_id)"
@@ -110,7 +110,7 @@ onMounted(async () => {
                   @change="togglePerm(group.menu.perm_id)"
                 /><b>{{ group.menu.perm_name }}</b><small>{{ group.menu.perm_key }}</small></label>
                 <button v-if="group.children.length && canConfig" class="link" @click="togglePerm(group.menu.perm_id)">全选/清空子项</button>
-              </summary>
+              </div>
               <div v-if="group.children.length" class="perm-children">
                 <label v-for="child in group.children" :key="child.perm_id">
                   <input type="checkbox" :checked="checked.has(child.perm_id)" :disabled="!canConfig" @change="togglePerm(child.perm_id)" />
@@ -118,7 +118,7 @@ onMounted(async () => {
                   <small>{{ child.perm_type === 2 ? "按钮" : "数据" }}</small>
                 </label>
               </div>
-            </details>
+            </div>
           </template>
         </template>
       </div>
